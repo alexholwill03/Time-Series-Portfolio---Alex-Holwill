@@ -1,0 +1,202 @@
+---
+title: "Time Series EDA"
+author: "Alex Holwill"
+format: pdf
+editor: visual
+---
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+
+# load packages
+
+library(tidyverse)
+library(timetk)
+library(tsibble)
+library(feasts)
+library(fabletools)
+library(tibbletime)
+library(lubridate)
+library(tseries)
+library(knitr)
+```
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+
+# read the FRED csv and rename columns
+
+za_raw <- read_csv("data/IRLTLT01ZAM156N.csv", show_col_types = FALSE) |>
+  rename(date = observation_date, yield = IRLTLT01ZAM156N) |>
+  mutate(date = as.Date(date), yield = as.numeric(yield)) |>
+  arrange(date)
+
+tibble(n = nrow(za_raw),
+  start = min(za_raw$date),
+  end = max(za_raw$date),
+  n_missing = sum(is.na(za_raw$yield))
+) |> kable(caption = "Raw series:")
+```
+
+Data is from the federal reserve bank of St. Louis (https://fred.stlouisfed.org/series/IRLTLT01ZAM156N) and looks at government bond yields in South Africa.
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+
+# check whether the series is market-determined or administered, by era
+
+za_raw |>
+  mutate(
+    change = yield - lag(yield),
+    era = cut(year(date),
+              breaks = c(1956, 1975, 1985, 1994, 2000, 2008, 2020, 2027),
+              labels = c("pre-1976", "1976-85", "1986-94 sanctions era", "1995-2000 pre-targeting", "2001-08 inflation targeting", "2009-20 post-GFC", "2021-26 post-COVID"))
+              
+  ) |>
+  filter(!is.na(change)) |>
+  group_by(era) |>
+  summarise(
+    n = n(),
+    pct_no_change = round(100 * mean(change == 0), 1),
+    n_distinct = n_distinct(yield),
+    sd_of_changes = round(sd(change), 3),
+    .groups = "drop"
+  ) |>
+  kable(caption = "Months with zero change by era. A high percentage indicates an administered rate rather than a market-determined yield.")
+```
+
+It should be noted here that the era boundaries are built around the South African historical context in regime changes, you could probably argue for different ones and these are subject to change, I will brush up on my history but for now this is the regime separation I have used off my highschool history and general knowledge.
+
+However, pre 1976 the standard deviation is substantially lower than the other regimes.
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+
+# restrict to the market-determined period and build both a tibble and a tsibble
+
+start_date <- as.Date("1976-01-01")
+
+za_tbl <- za_raw |>
+  filter(date >= start_date)
+
+za_ts <- za_tbl |>
+  mutate(month = yearmonth(date)) |>
+  as_tsibble(index = month) |>
+  select(month, yield)
+
+za_tt <- za_tbl |>
+  as_tbl_time(index = date)
+
+has_gaps(za_ts) |> as_tibble() |> kable(caption = "Implicit gaps in the monthly index.")
+```
+
+Checking for any gaps in each month, if there are gaps the lag() and difference() functions would skip a missing month, this confirms no missing months.
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+
+# summary statistics for levels and first differences
+
+bind_rows(
+  za_tbl |> summarise(series = "levels", n = n(), mean = mean(yield),
+                      sd = sd(yield), min = min(yield), max = max(yield)),
+  za_tbl |> mutate(d = yield - lag(yield)) |> filter(!is.na(d)) |>
+    summarise(series = "first differences", n = n(), mean = mean(d),
+              sd = sd(d), min = min(d), max = max(d))
+) |>
+  mutate(across(where(is.numeric), \(x) round(x, 3))) |>
+  kable(caption = "Summary statistics.")
+```
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+
+# time plot of the yield with the era boundaries marked
+
+events <- tribble(
+  ~ date, ~ label, as.Date("1976-01-01"), "market pricing begins", as.Date("1985-09-01"), "debt standstill", as.Date("1994-04-01"), "democratic transition", as.Date("2000-02-01"), "inflation targeting", as.Date("2008-09-01"), "GFC", as.Date("2020-03-01"), "COVID")
+
+za_tbl |>
+  plot_time_series(date, yield, .smooth = FALSE, .interactive = FALSE, .title = "SA 10-year government bond yield", .y_lab = "per cent per annum") +
+  geom_vline(data = events, aes(xintercept = date), linetype = "dotted", colour = "lightblue") +
+  geom_text(data = events, aes(x = date, y = 19.5, label = label), angle = 90, hjust = 1, size = 2.4, colour = "blue")
+```
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+
+# first differences and a 24-month rolling standard deviation
+
+roll_sd_24 <- rollify(\(x) sd(x, na.rm = TRUE), window = 24)
+
+za_diff <- za_tt |>
+  mutate(change = yield - lag(yield)) |>
+  filter(!is.na(change)) |>
+  mutate(roll_sd = roll_sd_24(change))
+
+za_diff |>
+  plot_time_series(date, change, .smooth = FALSE, .interactive = FALSE, .title = "First differences of the yield", .y_lab = "percentage points")
+
+za_diff |>
+  filter(!is.na(roll_sd)) |>
+  plot_time_series(date, roll_sd, .smooth = FALSE, .interactive = FALSE, .title = "24-month rolling standard deviation of changes", .y_lab = "percentage points")
+```
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+
+# ACF and PACF of the levels
+
+za_ts |>
+  gg_tsdisplay(yield, plot_type = "partial", lag_max = 36) +
+  labs(title = "Levels: series, ACF and PACF")
+```
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+
+# ACF and PACF of the first differences
+
+za_ts |>
+  gg_tsdisplay(difference(yield), plot_type = "partial", lag_max = 36) +
+  labs(title = "First differences: series, ACF and PACF")
+```
+
+```{r}
+#| echo: false
+#| warning: false
+#| message: false
+
+# ADF and KPSS tests on the levels and the first differences
+
+lv <- za_tbl$yield
+df <- diff(lv)
+
+tibble(
+  series = c("levels", "first differences"),
+  adf_stat = c(adf.test(lv)$statistic, adf.test(df)$statistic),
+  adf_p = c(adf.test(lv)$p.value, adf.test(df)$p.value),
+  kpss_stat = c(kpss.test(lv)$statistic, kpss.test(df)$statistic),
+  kpss_p = c(kpss.test(lv)$p.value, kpss.test(df)$p.value)
+) |>
+  mutate(across(where(is.numeric), \(x) round(x, 4))) |>
+  kable(caption = "ADF tests the null of a unit root; KPSS tests the null of stationarity. tseries truncates p-values at the ends of its tables.")
+```
