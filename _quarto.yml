@@ -11,10 +11,8 @@ website:
         text: Home
       - href: journal.qmd
         text: Journal
-      - href: section-1/section-1.qmd
-        text: Section 1
-      - href: reflective-commentary.qmd
-        text: Reflection
+      - href: section-1/eda.qmd
+        text: EDA
       - href: ai-use-log.qmd
         text: AI use
 
