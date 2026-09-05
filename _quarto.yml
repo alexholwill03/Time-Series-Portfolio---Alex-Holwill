@@ -1,0 +1,28 @@
+project:
+  type: website
+  output-dir: _site
+  execute-dir: project
+
+website:
+  title: "Time Series Analysis Portfolio"
+  navbar:
+    left:
+      - href: index.qmd
+        text: Home
+      - href: journal.qmd
+        text: Journal
+      - href: section-1/section-1.qmd
+        text: Section 1
+      - href: reflective-commentary.qmd
+        text: Reflection
+      - href: ai-use-log.qmd
+        text: AI use
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    code-fold: true
+
+execute:
+  freeze: auto
