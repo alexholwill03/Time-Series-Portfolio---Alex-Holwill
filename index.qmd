@@ -1,0 +1,14 @@
+---
+title: "Time Series Analysis Portfolio"
+---
+
+Alex Holwill - HLWALE001
+
+Time Series Portfolio:
+
+## Contents
+
+- [Journal](journal.qmd)
+- [Section 1](eda.qmd)
+- [Reflective commentary](reflective-commentary.qmd)
+- [AI use log](ai-use-log.qmd)
