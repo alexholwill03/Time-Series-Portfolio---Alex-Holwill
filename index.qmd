@@ -1134,8 +1134,8 @@ Harmonic regression is most useful when the seasonal period is long or not a who
 - Question: can monthly yield changes be described by a small number of regimes with different means and volatilities, and does a regime model forecast better than an iid normal model?
 - Data: monthly changes in the yield from April 1975, with the last 24 months held out
 - Methods: Gaussian HMM likelihood by the scaled forward algorithm, with a lower bound on the state standard deviations, numerical maximisation from several starting values, number of states chosen by AIC and BIC, Viterbi and forward-backward decoding, mixture forecast distributions, one-step-ahead evaluation by coverage and log score, simulated level forecasts, check against depmixS4
-- Key findings: **key findings**
-- What I would do differently: **what you would do differently next time**
+- Key findings: BIC picks two states with almost the same mean (close to zero) but different volatility: a calm state with a standard deviation of 0.24 percentage points and a volatile state with 0.57. The calm state covers about two thirds of the time and lasts about 25 months on average, and the volatile state lasts about 12 months. The volatile state matches the mid-1980s and the late 1990s. On the 24 test months the HMM does not forecast better than the iid normal model: both cover 23 of the 24 months, but the HMM has wider intervals and a worse log score.
+- What I would do differently: I would add an MA(1) term within each state, since Projects 1 and 2 found autocorrelation in the changes, try the 3-state model that AIC prefers, and evaluate the forecasts over a longer test period.
 
 ### Analysis
 
@@ -1296,7 +1296,7 @@ sel |>
   kable(caption = "Number of states: log-likelihood, AIC and BIC. code is the nlm convergence code (1 or 2 indicates probable convergence).")
 ```
 
-**Interpretation: the number of states chosen by BIC, and whether AIC agrees**
+BIC chooses 2 states (450.8, against 466.5 for 3 states and 549.9 for 1), so the code uses 2 states from here on. AIC does not agree and prefers 3 states (413.9 against 424.5). The third state adds 6 parameters for a log-likelihood gain of about 11, which is enough for AIC but not for BIC, because BIC penalises extra parameters more heavily with 591 observations. All three fits converged (code 1). Going from 1 to 2 states improves the log-likelihood by about 62, so there is strong evidence for at least two regimes.
 
 ```{r}
 #| echo: true
@@ -1316,7 +1316,7 @@ dimnames(gamma_tbl) <- list(paste("from state", 1:m_hat), paste("to state", 1:m_
 kable(gamma_tbl, caption = "Estimated transition probability matrix.")
 ```
 
-**Interpretation of the state means, standard deviations, transition probabilities (expected duration 1 / (1 - gamma_ii) months) and stationary distribution**
+The two states have almost the same mean, 0.001 and 0.008 percentage points, so they do not differ in direction. They differ in volatility: state 1 is calm, with a standard deviation of 0.24 percentage points, and state 2 is volatile, with 0.57, more than twice as large. Both states are persistent. The chance of staying in the calm state from one month to the next is 0.96, so a calm spell lasts 1 / (1 - 0.9593) ≈ 25 months on average. For the volatile state it is 0.92, so a volatile spell lasts about 12 months. In the long run the yield spends about two thirds of the time in the calm state (0.665) and one third in the volatile state (0.335).
 
 #### Global decoding (Viterbi)
 
@@ -1423,7 +1423,7 @@ legend("topright", legend = paste("State", 1:m_hat), col = state_cols,
        lty = 1, bty = "n")
 ```
 
-**Interpretation: which historical periods fall in each state, linked to the era boundaries in the exploratory analysis**
+The calm state covers most of 1975 to 1981, most of 1987 to 1991, and almost all of the time from 2003 onwards. The volatile state covers most of 1982 to 1987, around the debt standstill, several shorter spells in the early 1990s, and most of 1995 to 2002, including the 1998 peak. After 2003 the model only moves into the volatile state for short spells, around the 2008 financial crisis, in 2013 and in 2020. This matches the rolling standard deviation in the EDA, which is highest in the mid-1980s and the late 1990s and lower after inflation targeting began. The smoothed probabilities are mostly close to 0 or 1, so the model is usually quite sure which state it is in. The exceptions are short periods such as the early 1990s and 2022, where the probabilities are in between.
 
 #### Forecast distribution
 
@@ -1511,7 +1511,7 @@ rbind(hmm = one_step_eval(hmm_fit, filt_all),
   kable(caption = "One-step-ahead evaluation on the test months: coverage of the 95% interval, mean interval width and mean log score.")
 ```
 
-**Interpretation of coverage, interval width and log score for the HMM against the iid normal model**
+Both models cover 23 of the 24 test months (95.8%), so they do equally well on coverage. The HMM intervals are wider on average (1.59 against 1.49 percentage points) and its log score is worse (-0.538 against -0.386), so on these test months the HMM forecasts worse than the iid normal model. A likely reason is that volatility in the test period (about 0.33 since 2022, from the EDA) sits between the two states. When the filter puts the model in the calm state (standard deviation 0.24), the larger changes, such as the rise of about 0.8 in early 2026, get a very low predicted probability, and this pulls the log score down. With only 24 test months this is weak evidence either way, but it does not support the idea that the regime model forecasts better.
 
 #### Yield level forecasts by simulation
 
@@ -1566,7 +1566,7 @@ legend("topleft", legend = c(paste0(m_hat, "-state HMM (median, 95%)"), "1-state
        col = c("red", "steelblue"), lty = c(1, 3), bty = "n")
 ```
 
-**Interpretation of the simulated yield-level forecast bands**
+The HMM median forecast stays flat at about 11.7%, because both states have a mean change close to zero. The 95% band widens over time, from about 1.5 percentage points wide at one month to about 7 percentage points (about 8.4% to 15.5%) at 24 months. It is almost the same as the band from the iid normal model, because over two years the HMM moves towards its long-run mix of states, whose overall standard deviation (about 0.38) is the same as that of the iid model. The actual yield fell from about 11.7% to about 8.3% by early 2026, which is near the lower edge of both bands. Neither model expected a fall this big, but both treat it as possible.
 
 #### Check against depmixS4
 
@@ -1590,11 +1590,15 @@ summary(fm)
 table(own = vit, depmixS4 = fm@posterior$state)
 ```
 
-**Comment on the agreement between the two fits**
+The two fits agree very closely. The state means, standard deviations and transition probabilities are the same to two decimal places once the labels are swapped (depmixS4's state 1 is my state 2). The Viterbi paths agree in all 591 training months: the cross-table has 418 and 173 months on its off-diagonal, which are the same states under swapped labels, and no disagreements. depmixS4's log-likelihood is slightly higher (-205.86 against -206.24), which is expected because it estimates the initial distribution freely instead of fixing it at the stationary distribution. This also shows that the standard deviation floor does not affect the 2-state fit, since depmixS4 has no floor and gets the same answer.
 
 ### Discussion
 
-**Discussion: conclusions, limitations (Gaussian states, no autocorrelation within states, parameters held fixed over the test period), and comparison with the GARCH view of volatility in [Project 2](#sec-project-2)**
+Monthly yield changes are well described by two regimes with the same average change but different volatility: a calm regime that the yield is in about two thirds of the time and a volatile regime with more than twice the standard deviation. The regimes are persistent, lasting about 25 and 12 months on average, and the volatile regime matches the mid-1980s and late 1990s. However, the HMM did not forecast better than a simple iid normal model on the 24 test months.
+
+There are some limitations. Each state assumes normal changes with no autocorrelation, but Projects 1 and 2 found an MA(1) in the changes, so the model leaves this out. The parameters were held at their training values over the test period, and 24 test months are too few to compare the forecasts with much confidence. AIC and BIC disagree on the number of states, so the choice of 2 is not clear-cut. Finally, the standard deviation floor was needed to stop the 3-state fit from collapsing onto the months with no change.
+
+The HMM and the GARCH model in [Project 2](#sec-project-2) give two different views of the same changing volatility. In the GARCH model volatility moves smoothly from month to month, jumping after each big shock and fading with a half-life of about 7.5 months. In the HMM volatility switches between two fixed levels and stays there for a year or more. Both point to the same volatile periods: the mid-1980s, the late 1990s and short spells such as 2020. The GARCH model can represent levels in between, like the moderate volatility since 2022, which the 2-state HMM cannot. This may be why the HMM forecast poorly in the test period, and why AIC prefers a third state.
 
 ## Synthesis across the projects {#sec-synthesis}
 
