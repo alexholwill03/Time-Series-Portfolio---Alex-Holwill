@@ -1612,7 +1612,7 @@ Taken together, the projects say that the level of the yield is hard to forecast
 
 # Tutorials {#sec-tutorials}
 
-Here I did some of the questions as they were in the various exercises and tutorial packs. The heading of that section of that tutorial is the same as in the uploaded version on amathuba. 
+Here I did some of the questions as they were in the various exercises and tutorial packs. The heading of that section of that tutorial is the same as in the uploaded version on amathuba.
 
 ## Tutorial 1 - Time Series Analysis_Part 1_Exercise
 
@@ -2479,7 +2479,7 @@ In the long run X_t = 1 five times out of six (0.833) and X_t = 0 one time out o
 
 ### Question 8
 
-Annual counts of major earthquakes, 1900 to 2006.
+Annual counts of major earthquakes, 1900 to 2006 (Zucchini and MacDonald, 2009).
 
 ```{r}
 #| echo: true
@@ -2595,7 +2595,7 @@ The two-state model has a low-rate state with about 15.5 earthquakes a year and 
 
 ## Data access
 
-The bond yield data can be downloaded as a CSV from the [FRED series page](https://fred.stlouisfed.org/series/IRLTLT01ZAM156N) and saved as `data/IRLTLT01ZAM156N.csv` in the project folder. The Project 3 temperature series (`nottem`) and the tutorial datasets come from R packages (fpp2 and its dependencies, and the base datasets package) or are entered in the code. **Date the data were downloaded**
+The bond yield data can be downloaded as a CSV from the [FRED series page](https://fred.stlouisfed.org/series/IRLTLT01ZAM156N) and saved as `data/IRLTLT01ZAM156N.csv` in the project folder. The file used here was downloaded on 4 September 2026 and covers January 1957 to June 2026 (834 monthly observations). FRED can revise or extend the series, so a later download may give slightly different results. The Project 3 temperature series (`nottem`), the Nile and co2 series in Tutorial 3, and the Tutorial 2 datasets come from R packages (the base datasets package, and fpp2 and its dependencies). The earthquake counts in Tutorial 4 and the small examples in the other tutorials are entered in the code. Random seeds are set in the code wherever results depend on simulation or random starting values, so rendering `index.qmd` gives the same results each time.
 
 ## Source code
 
@@ -2615,10 +2615,42 @@ sessionInfo()
 
 ## References
 
-**References in one consistent style: the FRED and OECD data, the textbooks and course notes, the R packages used (fable, forecast, rugarch, depmixS4, dlm and others), and any papers cited**
+Anderson, O. D. (1976). *Time Series Analysis and Forecasting: The Box-Jenkins Approach*. London: Butterworths.
+
+Brockwell, P. J. and Davis, R. A. (2016). *Introduction to Time Series and Forecasting* (3rd ed.). Cham: Springer.
+
+Cowpertwait, P. S. P. and Metcalfe, A. V. (2009). *Introductory Time Series with R*. New York: Springer.
+
+Galanos, A. (2026). rugarch: Univariate GARCH models. R package version 1.5-6.
+
+Hyndman, R. J. and Athanasopoulos, G. (2018). *Forecasting: Principles and Practice* (2nd ed.). Melbourne: OTexts. Available at: <https://otexts.com/fpp2/>
+
+Hyndman, R. J. and Khandakar, Y. (2008). Automatic time series forecasting: the forecast package for R. *Journal of Statistical Software*, 27(3), 1-22.
 
 OECD (n.d.). Long-term interest rates (indicator). Paris: OECD. Available at: <https://www.oecd-ilibrary.org/en/data/indicators/long-term-interest-rates.html> (accessed 29 October 2026).
 
+OECD (2026). Interest Rates: Long-Term Government Bond Yields: 10-Year: Main (Including Benchmark) for South Africa [IRLTLT01ZAM156N]. Retrieved from FRED, Federal Reserve Bank of St. Louis. Available at: <https://fred.stlouisfed.org/series/IRLTLT01ZAM156N> (accessed 4 September 2026).
+
+O'Hara-Wild, M., Hyndman, R. and Wang, E. (2026). fable: Forecasting models for tidy time series. R package version 0.5.0. doi:10.32614/CRAN.package.fable. Available at: <https://CRAN.R-project.org/package=fable>
+
+Petris, G. (2010). An R package for dynamic linear models. *Journal of Statistical Software*, 36(12), 1-16.
+
+R Core Team (2026). *R: A Language and Environment for Statistical Computing*. Version 4.6.1. Vienna: R Foundation for Statistical Computing.
+
+Shumway, R. H. and Stoffer, D. S. (2017). *Time Series Analysis and Its Applications: With R Examples* (4th ed.). Cham: Springer.
+
 South African Reserve Bank (1975). Statement regarding the abolition of the fixed pattern of interest rates on Government securities. *Quarterly Bulletin*, March 1975, p. 23. Pretoria: South African Reserve Bank. Available at: <https://www.resbank.co.za/content/dam/sarb/publications/quarterly-bulletins/quarterly-bulletin-publications/1975/5431/03Statement-regarding-the-abolition-of-the-fixed-pattern-of-interest-rates-on-Government-securities.pdf>
 
+Trapletti, A. and Hornik, K. (2026). tseries: Time series analysis and computational finance. R package version 0.10-63. doi:10.32614/CRAN.package.tseries. Available at: <https://CRAN.R-project.org/package=tseries>
+
+University of Cape Town (2026). *Time Series Analysis, Honours: Lecture Notes, Part 1*. Department of Statistical Sciences, University of Cape Town.
+
+Visser, I. and Speekenbrink, M. (2010). depmixS4: An R package for hidden Markov models. *Journal of Statistical Software*, 36(7), 1-21.
+
+Wang, E., Cook, D. and Hyndman, R. J. (2020). A new tidy data structure to support exploration and modeling of temporal data. *Journal of Computational and Graphical Statistics*, 29(3), 466-478.
+
+Wickham, H. et al. (2019). Welcome to the tidyverse. *Journal of Open Source Software*, 4(43), 1686.
+
 Working, H. (1960). Note on the correlation of first differences of averages in a random chain. *Econometrica*, 28(4), 916-918.
+
+Zucchini, W. and MacDonald, I. L. (2009). *Hidden Markov Models for Time Series: An Introduction Using R*. Boca Raton: Chapman and Hall/CRC.

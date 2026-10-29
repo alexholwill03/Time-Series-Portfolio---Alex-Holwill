@@ -1,13 +1,1 @@
-## Entry title (YYYY-MM-DD)
-
-- Tool: placeholder
-- Purpose: placeholder
-- Prompt or request: placeholder
-- How the output was used or verified: placeholder
-
-## Entry title (YYYY-MM-DD)
-
-- Tool: placeholder
-- Purpose: placeholder
-- Prompt or request: placeholder
-- How the output was used or verified: placeholder
+This is more of an AI declaration than a use log, but here goes. I used Claude.ai, Opus 5.5 on either Medium or High effort. I used these 2 models to assist in coding and debugging, setting up my github site and some of the LaTeX in the index.qmd file. I also used it to check my work and to offer potential ideas to for what to add to existing projects. 
