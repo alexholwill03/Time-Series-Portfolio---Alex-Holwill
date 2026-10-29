@@ -238,7 +238,7 @@ tibble(
   kable(caption = "ADF tests the null of a unit root; KPSS tests the null of stationarity. tseries truncates p-values at the ends of its tables.")
 ```
 
-The ADF test has the null hypothesis that there is a unit root (the tseries version includes a constant and a linear trend). The KPSS test has the opposite null hypothesis, that the series is stationary. For the levels, the ADF test does not reject a unit root (statistic -2.30, p = 0.45) and the KPSS test rejects stationarity (statistic 3.80, p < 0.01). For the first differences it is the other way round: the ADF test rejects a unit root (statistic -9.90, p < 0.01) and the KPSS test does not reject stationarity (statistic 0.13, p > 0.10). So both tests agree that the yield needs to be differenced once. tseries cuts off the p-values at the ends of its tables, so the printed values of 0.01 and 0.10 are bounds, not exact values.
+The ADF test has the null hypothesis that there is a unit root (the tseries version includes a constant and a linear trend). The KPSS test has the opposite null hypothesis, that the series is stationary. For the levels, the ADF test does not reject a unit root (statistic -2.30, p = 0.45) and the KPSS test rejects stationarity (statistic 3.80, p \< 0.01). For the first differences it is the other way round: the ADF test rejects a unit root (statistic -9.90, p \< 0.01) and the KPSS test does not reject stationarity (statistic 0.13, p \> 0.10). So both tests agree that the yield needs to be differenced once. tseries cuts off the p-values at the ends of its tables, so the printed values of 0.01 and 0.10 are bounds, not exact values.
 
 ## Implications for the projects
 
@@ -525,7 +525,7 @@ tidy(fit_full) |>
   kable(caption = "Full sample ARIMA estimates.")
 ```
 
-The full-sample estimate is θ = 0.343 with a standard error of 0.040, which gives an approximate 95% interval of 0.27 to 0.42, so the coefficient is clearly positive. It implies a lag 1 autocorrelation in the monthly changes of θ/(1 + θ²) ≈ 0.31, which is close to the 0.28 in the data, and since |θ| < 1 the model is invertible. A positive θ means that part of a surprise this month carries into next month. For example, if the yield rises 1 percentage point more than expected, the forecast for next month is 0.34 percentage points above this month's value. One possible reason for this is averaging. The OECD says its long-term rates are generally averages of daily rates (OECD, n.d.), and Working (1960) showed that the changes in averages of a random walk have a lag 1 autocorrelation of about 0.25, which is close to what I find. The estimate is lower than on the first window (0.42), which could be sampling variation or a weaker effect after 1995.
+The full-sample estimate is θ = 0.343 with a standard error of 0.040, which gives an approximate 95% interval of 0.27 to 0.42, so the coefficient is clearly positive. It implies a lag 1 autocorrelation in the monthly changes of θ/(1 + θ²) ≈ 0.31, which is close to the 0.28 in the data, and since \|θ\| \< 1 the model is invertible. A positive θ means that part of a surprise this month carries into next month. For example, if the yield rises 1 percentage point more than expected, the forecast for next month is 0.34 percentage points above this month's value. One possible reason for this is averaging. The OECD says its long-term rates are generally averages of daily rates (OECD, n.d.), and Working (1960) showed that the changes in averages of a random walk have a lag 1 autocorrelation of about 0.25, which is close to what I find. The estimate is lower than on the first window (0.42), which could be sampling variation or a weaker effect after 1995.
 
 ```{r}
 #| echo: true
@@ -577,7 +577,7 @@ Possible extensions are a Diebold-Mariano test of the accuracy differences, choo
 - Question: is the variance of monthly yield changes time-varying, and which GARCH specification describes it best?
 - Data: monthly changes in the SA 10-year bond yield from April 1975
 - Methods: ARMA mean model chosen by information criteria, Ljung-Box and Engle LM tests for ARCH effects, GARCH(1,1) and GJR-GARCH(1,1) with normal and Student t innovations fitted jointly with the mean, robust standard errors, standardised residual diagnostics, news impact curves, volatility forecasts
-- Key findings: monthly yield changes show clear ARCH effects (Engle LM test, p < 0.001). GARCH(1,1) with Student t errors (about 5.3 degrees of freedom) fits best by the log-likelihood, AIC and BIC, and removes the ARCH effects. Volatility is fairly persistent, with a half-life of about 7.5 months, and there is no evidence that rises and falls in the yield affect volatility differently.
+- Key findings: monthly yield changes show clear ARCH effects (Engle LM test, p \< 0.001). GARCH(1,1) with Student t errors (about 5.3 degrees of freedom) fits best by the log-likelihood, AIC and BIC, and removes the ARCH effects. Volatility is fairly persistent, with a half-life of about 7.5 months, and there is no evidence that rises and falls in the yield affect volatility differently.
 - What I would do differently: I would refit the chosen model on parts of the sample to check whether the persistence is partly caused by shifts in volatility between eras, and compare the models on how well they forecast volatility out of sample, not just on in-sample fit.
 
 ### Analysis
@@ -676,7 +676,7 @@ tibble(
   kable(caption = "Tests on the residuals of the mean model.")
 ```
 
-The Ljung-Box test on the residuals (Q = 12.29, 11 degrees of freedom, p = 0.34) does not reject no autocorrelation, so the MA(1) mean model is fine. The Ljung-Box test on the squared residuals (Q = 50.1, 12 degrees of freedom, p < 0.001) and Engle's LM test (33.4, 12 degrees of freedom, p < 0.001) both reject no ARCH effects. So the variance of the changes moves over time, which is why I fit GARCH models.
+The Ljung-Box test on the residuals (Q = 12.29, 11 degrees of freedom, p = 0.34) does not reject no autocorrelation, so the MA(1) mean model is fine. The Ljung-Box test on the squared residuals (Q = 50.1, 12 degrees of freedom, p \< 0.001) and Engle's LM test (33.4, 12 degrees of freedom, p \< 0.001) both reject no ARCH effects. So the variance of the changes moves over time, which is why I fit GARCH models.
 
 ```{r}
 #| echo: true
@@ -737,7 +737,7 @@ imap_dfr(garch_fits, \(f, nm) {
   kable(caption = "Estimates with robust standard errors.")
 ```
 
-The mean part is almost the same in all four models. The MA(1) coefficient is about 0.31 (robust standard error about 0.04), close to the 0.34 in Project 1, and mu is not significantly different from zero. In the GARCH t model, alpha1 = 0.19 (robust standard error 0.07) shows how strongly the variance reacts to last month's shock, and beta1 = 0.72 (0.11) shows how much of last month's variance carries over. With normal errors alpha1 is similar (0.21) but beta1 is much lower (0.48), so volatility dies out faster. A likely reason is that the normal model has to explain extreme months with spikes in the variance that then have to fade quickly, while the t distribution can treat some of them as draws from its heavier tails. The asymmetry term gamma1 is close to zero with a large standard error in both GJR models (0.007 with standard error 0.11, and 0.004 with standard error 0.08, both p > 0.95), so there is no evidence of asymmetry. The t degrees of freedom are about 5.3 (robust standard error 1.5), which means heavy tails. This implies an excess kurtosis of about 6/(5.3 - 4) ≈ 4.6 in the errors, but with this standard error that number is very rough.
+The mean part is almost the same in all four models. The MA(1) coefficient is about 0.31 (robust standard error about 0.04), close to the 0.34 in Project 1, and mu is not significantly different from zero. In the GARCH t model, alpha1 = 0.19 (robust standard error 0.07) shows how strongly the variance reacts to last month's shock, and beta1 = 0.72 (0.11) shows how much of last month's variance carries over. With normal errors alpha1 is similar (0.21) but beta1 is much lower (0.48), so volatility dies out faster. A likely reason is that the normal model has to explain extreme months with spikes in the variance that then have to fade quickly, while the t distribution can treat some of them as draws from its heavier tails. The asymmetry term gamma1 is close to zero with a large standard error in both GJR models (0.007 with standard error 0.11, and 0.004 with standard error 0.08, both p \> 0.95), so there is no evidence of asymmetry. The t degrees of freedom are about 5.3 (robust standard error 1.5), which means heavy tails. This implies an excess kurtosis of about 6/(5.3 - 4) ≈ 4.6 in the errors, but with this standard error that number is very rough.
 
 ```{r}
 #| echo: true
@@ -1602,23 +1602,19 @@ The HMM and the GARCH model in [Project 2](#sec-project-2) give two different vi
 
 ## Synthesis across the projects {#sec-synthesis}
 
-**Synthesis: how the projects connect (the constant-variance intervals of Project 1 motivate Project 2; Projects 2 and 4 give two explanations of changing volatility; Project 3 tests for the seasonality checked informally in Project 1), and what the four together say about forecasting the yield**
+The four projects fit together as follows. Project 1 shows that the yield behaves almost like a random walk. A small MA(1) effect helps one month ahead, but after that the naive forecast is as good as anything else. Its prediction intervals assume a constant variance, and the residuals show that this is not true, because big changes cluster together in certain periods. This is what Project 2 picks up. The same MA(1) appears in its mean model (0.31, against 0.34 in Project 1), and a GARCH(1,1) with Student t errors removes the ARCH effects and shows volatility jumping after big shocks and then fading, with a half-life of about 7.5 months.
+
+Project 4 looks at the same changing volatility in a different way. Instead of volatility that moves smoothly from month to month, the HMM switches between a calm and a volatile regime that each last a year or more. The two models agree on when the yield was volatile: the mid-1980s, the late 1990s and short spells such as 2020. This suggests these periods come from the data rather than from the assumptions of one model. Where they differ is in how volatility changes. GARCH allows any level in between, while the 2-state HMM only has two levels. In the test period this mattered, because volatility since 2022 has been moderate and the HMM did not forecast better than an iid normal model.
+
+Project 3 uses a different series. On the Nottingham temperatures, which have a strong yearly cycle, it forecasts as well as a SARIMA model while being simpler to interpret.
+
+Taken together, the projects say that the level of the yield is hard to forecast beyond one month, and that most of what can be modelled is in its volatility rather than its direction. The regime model does not improve the forecast capacity. The most useful next step would be to combine the ARIMA mean from Project 1 with the GARCH variance from Project 2. The forecast of the level would then stay close to a random walk, but the prediction intervals would widen and narrow with volatility.
 
 # Tutorials {#sec-tutorials}
 
-## Section overviews
+Here I did some of the questions as they were in the various exercises and tutorial packs. The heading of that section of that tutorial is the same as in the uploaded version on amathuba. 
 
-### Section 1
-
-**Overview of Section 1: key concepts, the most challenging aspects, and your understanding**
-
-### Section 2
-
-**Overview of Section 2: key concepts, the most challenging aspects, and your understanding**
-
-## Tutorial 1: The forecasting process and features of time series {#sec-tut-1}
-
-**Brief statement of each question, so the answers can be read on their own**
+## Tutorial 1 - Time Series Analysis_Part 1_Exercise
 
 ### Question 1
 
@@ -1660,7 +1656,7 @@ Conclusion. Together the plots indicate that the series is non-stationary in the
 
 **Reflection: what you learned, what was difficult, and how it fed into the projects**
 
-## Tutorial 2: Exponential smoothing {#sec-tut-2}
+## Tutorial 2 - TS-Exercises-Exponential-Smoothing
 
 **Brief statement of each question**
 
@@ -2008,7 +2004,7 @@ rbind(true = c(alpha = 0.3, beta = 0.05, l = 50, b = 0.5, sigma = 2),
 
 **Reflection: what you learned, what was difficult, and how it fed into the projects**
 
-## Tutorial 3: Dynamic linear models {#sec-tut-3}
+## Tutorial 3 - dlm prac
 
 **Brief statement of each question**
 
@@ -2280,7 +2276,7 @@ legend("bottomleft", legend = c("q = 1", "q = 2", "dummies"), col = c("black", "
 
 **Reflection: what you learned, what was difficult, and how it fed into the projects**
 
-## Tutorial 4: Hidden Markov models {#sec-tut-4}
+## Tutorial 4 - HMM-Tutorial
 
 **Brief statement of each question**
 
