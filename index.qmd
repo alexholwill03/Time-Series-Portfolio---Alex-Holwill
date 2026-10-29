@@ -8,7 +8,7 @@ editor: visual
 
 # Overview {#sec-overview}
 
-This portfolio uses the methods covered in this course on real-world data. I have done 4 projects: project 1 looks at benchmark forecast versus ARIMA models forecast and compares them, project 2 looks at the volatility of bond yields and which GARCH specification describes it best, project 3 uses harmonic regression and project 4 use Hidden Markov Models to find regimes in yield changes and compare the regime modal forecast against a modal that assume errors are I.I.D. and normal. Porject 1,2 and 4 all look at the same data, South African 10-year government bond yields and project 3 looks at the average air temperature in Nottingham. Also, the tutorial questions that I have done have been provided below as well as an AI use log and journal. 
+This portfolio uses the methods covered in this course on real-world data. I have done 4 projects: project 1 looks at benchmark forecast versus ARIMA models forecast and compares them, project 2 looks at the volatility of bond yields and which GARCH specification describes it best, project 3 uses harmonic regression and project 4 use Hidden Markov Models to find regimes in yield changes and compare the regime modal forecast against a modal that assume errors are I.I.D. and normal. Project 1,2 and 4 all look at the same data, South African 10-year government bond yields and project 3 looks at the average air temperature in Nottingham. Also, the tutorial questions that I have done have been provided below as well as an AI use log and journal.
 
 # Data {#sec-data}
 
@@ -86,7 +86,7 @@ za_raw |>
   kable(caption = "Months with zero change by era. A high percentage indicates an administered rate rather than a market-determined yield.")
 ```
 
-The era boundaries mark changes in South Africa's political and monetary regime: the start of market pricing of government debt, the 1985 debt standstill, the 1994 democratic transition, inflation targeting from 2000, the global financial crisis and COVID-19. They are a working choice, and other boundaries could be defended. Before March 1975 the standard deviation of monthly changes is much lower than in any later era. In that period 86.6% of months show no change and the yield takes only 20 distinct values in 217 months, compared with 10.0% and 110 values in 1975-85 and almost no zero changes afterwards.
+The era boundaries mark changes in South Africa's political and monetary regime: the start of market pricing of government debt, the 1985 debt standstill, the 1994 democratic transition, inflation targeting from 2000, the global financial crisis and COVID-19. They are a working choice, and other boundaries could be defended. Before March 1975 the monthly changes are much smaller than in any later era. In that period 86.6% of months show no change at all, and the yield takes only 20 different values in 217 months. In 1975-85 only 10% of months show no change, and after that almost none do.
 
 From July 1952 the Reserve Bank set a fixed pattern of rates for long-dated government stock and changed it only from time to time. This pattern was abolished from 19 February 1975, after which the Bank dealt in government stock at market-related prices (South African Reserve Bank, 1975). The earlier values are therefore administered quotes rather than market yields, so the sample starts in March 1975, the first full month of market-related pricing.
 
@@ -135,7 +135,7 @@ bind_rows(
   kable(caption = "Summary statistics.")
 ```
 
-From March 1975 to June 2026 (616 months) the yield averages 11.68% with a standard deviation of 3.09 percentage points, and ranges from 6.90% to 18.30%. Monthly changes average -0.001 percentage points, so over the whole sample the yield ends slightly below where it started, and their standard deviation is 0.38 percentage points. The largest fall (1.79) and the largest rise (1.92) are about 4.7 and 5.0 standard deviations from zero, which suggests heavier tails than a normal distribution.
+From March 1975 to June 2026 (616 months) the yield averages 11.68%, with a standard deviation of 3.09 percentage points, and ranges from 6.90% to 18.30%. The average monthly change is almost zero (-0.001 percentage points), so the yield ends close to where it started. Monthly changes have a standard deviation of 0.38 percentage points. The biggest fall (1.79) and the biggest rise (1.92) are about 5 standard deviations from zero, which is much further out than you would expect from a normal distribution, so the changes have heavy tails.
 
 ## Time plot
 
@@ -155,7 +155,7 @@ za_tbl |>
   geom_text(data = events, aes(x = date, y = 19.5, label = label), angle = 90, hjust = 1, size = 2.4, colour = "blue")
 ```
 
-There is no obvious deterministic trend. The yield rises from about 9.5% in 1975 to about 17% by the 1985 debt standstill, stays mostly between 15% and 17% until the late 1990s, and reaches its maximum of 18.3% in 1998. It then falls steeply to about 8% by the mid-2000s, after inflation targeting began, and stays mostly between 7% and 10% until 2020. It rises to about 12% in 2023 and 2024 and falls back to about 9% by 2026. The series moves in long swings lasting years rather than fluctuating around a fixed mean, and each level persists long after it is reached. This is the behaviour expected of a series with a unit root, which the tests below examine formally.
+There is no obvious trend. The yield goes up from about 9.5% in 1975 to about 17% by the 1985 debt standstill, and stays between 15% and 17% for most of the time until the late 1990s. It peaks at 18.3% in 1998. After inflation targeting starts it falls quickly to about 8% by the mid-2000s, and then stays between 7% and 10% until 2020. It goes up to about 12% in 2023 and 2024 and falls back to about 9% by 2026. The yield moves in long swings that last for years and does not keep coming back to one average level. This is what you would expect if the series has a unit root, which I test below.
 
 ## Monthly changes and volatility
 
@@ -183,7 +183,7 @@ za_diff |>
 
 The first differences fluctuate around zero with no visible trend, but their spread changes over time. The 24-month rolling standard deviation is consistent with non-constant variance, which motivates the volatility models in [Project 2](#sec-project-2). Time-varying conditional variance is compatible with weak stationarity of the changes, provided the unconditional variance is finite, so these plots do not by themselves show that the changes are non-stationary.
 
-The rolling standard deviation is lowest in the late 1970s, at about 0.12 to 0.22 percentage points. It rises to about 0.55 to 0.64 between 1983 and 1987, around the debt standstill, falls to about 0.25 by 1990, and reaches its maximum of about 0.74 between 1998 and 2000. After inflation targeting it is mostly between 0.2 and 0.3 from 2004 to 2019, apart from a rise to about 0.4 around the 2008 financial crisis. It jumps to about 0.52 in 2020 and has been about 0.33 since 2022. Because each value uses the previous 24 months, a single large change, such as the rise in early 2020, raises the rolling value for exactly 24 months before it drops out, which produces the flat-topped shapes in the plot.
+The rolling standard deviation is lowest in the late 1970s, at about 0.12 to 0.22 percentage points. It goes up to about 0.55 to 0.64 between 1983 and 1987, around the debt standstill, drops to about 0.25 by 1990, and is highest at about 0.74 between 1998 and 2000. After inflation targeting it is mostly between 0.2 and 0.3 from 2004 to 2019, apart from a bump to about 0.4 around the 2008 financial crisis. It jumps to about 0.52 in 2020 and has been about 0.33 since 2022. Each value uses the last 24 months, so one big change, like the rise in early 2020, keeps the rolling value high for exactly 24 months until it drops out. This is why some of the peaks in the plot have flat tops.
 
 ## Autocorrelation
 
@@ -199,7 +199,7 @@ za_ts |>
   labs(title = "Levels: series, ACF and PACF")
 ```
 
-The ACF of the levels is close to 1 at lag 1 and decays very slowly and almost linearly, and is still about 0.77 at lag 36. The PACF has a single spike close to 1 at lag 1, a smaller negative spike of about -0.24 at lag 2, and little else. This is the pattern of an autoregressive process with a root at or very near 1, so the levels appear non-stationary and should be differenced. The negative partial autocorrelation at lag 2 is consistent with the positive lag 1 autocorrelation in the changes, discussed next.
+The ACF of the levels starts close to 1 and goes down very slowly, and it is still about 0.77 at lag 36. The PACF has one big spike close to 1 at lag 1, a smaller negative spike of about -0.24 at lag 2, and not much else. This is what a series with a unit root looks like, so the levels need to be differenced. The negative spike at lag 2 fits with the positive lag 1 autocorrelation in the changes, which I look at next.
 
 ```{r}
 #| echo: true
@@ -213,7 +213,7 @@ za_ts |>
   labs(title = "First differences: series, ACF and PACF")
 ```
 
-The changes have one clear autocorrelation, about 0.28 at lag 1. The other autocorrelations are small, and the few at or just beyond the bounds (lag 9 at about -0.10, and lags 21 and 34) are about what is expected by chance among 36 lags tested at the 5% level. The PACF is 0.28 at lag 1 and about -0.12 at lag 2, and then decays quickly with alternating signs. An ACF that cuts off after lag 1 with a decaying PACF suggests an MA(1) for the changes, that is ARIMA(0,1,1) for the levels. An AR(1) would instead show a PACF that cuts off after lag 1. There are no spikes at lags 12, 24 or 36, so there is no sign of seasonality.
+The changes have one clear autocorrelation, about 0.28 at lag 1. The others are small. A few are on or just over the bounds (lag 9 at about -0.10, and lags 21 and 34), but with 36 lags tested at the 5% level, one or two are expected to cross by chance. The PACF is 0.28 at lag 1 and about -0.12 at lag 2, and then dies out with alternating signs. An ACF that cuts off after lag 1 and a PACF that dies out points to an MA(1) for the changes, which is ARIMA(0,1,1) for the levels. If it were an AR(1), the PACF would cut off after lag 1 instead. There are no spikes at lags 12, 24 or 36, so there is no sign of seasonality.
 
 ## Stationarity tests
 
@@ -238,11 +238,11 @@ tibble(
   kable(caption = "ADF tests the null of a unit root; KPSS tests the null of stationarity. tseries truncates p-values at the ends of its tables.")
 ```
 
-The ADF test has the null hypothesis of a unit root, and the version in tseries includes a constant and a linear trend. The KPSS test has the null hypothesis of level stationarity. For the levels, the ADF statistic of -2.30 (p = 0.45) does not reject a unit root, and the KPSS statistic of 3.80 rejects stationarity (p < 0.01). For the first differences, the ADF statistic of -9.90 rejects a unit root (p < 0.01), and the KPSS statistic of 0.13 does not reject stationarity (p > 0.10). The two tests agree that the yield is consistent with being integrated of order one. The printed p-values of 0.01 and 0.10 are the limits of the tables that tseries interpolates from, so they are bounds rather than exact values.
+The ADF test has the null hypothesis that there is a unit root (the tseries version includes a constant and a linear trend). The KPSS test has the opposite null hypothesis, that the series is stationary. For the levels, the ADF test does not reject a unit root (statistic -2.30, p = 0.45) and the KPSS test rejects stationarity (statistic 3.80, p < 0.01). For the first differences it is the other way round: the ADF test rejects a unit root (statistic -9.90, p < 0.01) and the KPSS test does not reject stationarity (statistic 0.13, p > 0.10). So both tests agree that the yield needs to be differenced once. tseries cuts off the p-values at the ends of its tables, so the printed values of 0.01 and 0.10 are bounds, not exact values.
 
 ## Implications for the projects
 
-The yield is treated as integrated of order one: Project 1 forecasts the levels with one difference, and Projects 2 and 4 model the monthly changes. The ACF of the changes points to an MA(1), which Projects 1 and 2 use for the mean. The changing spread of the changes suggests volatility clustering, which Project 2 tests for and models with GARCH, and the shifts in level and volatility between eras motivate the regime model in Project 4. There is no evidence of seasonality in the changes, which is why Project 1 includes the seasonal naive method only as a check and why the harmonic regression in Project 3 uses a different series.
+In summary, I treat the yield as needing one difference. Project 1 forecasts the levels with one difference, and Projects 2 and 4 model the monthly changes. The ACF of the changes points to an MA(1), which Projects 1 and 2 use. The spread of the changes moves over time, so Project 2 tests for volatility clustering and models it with GARCH, and the shifts in level and volatility between eras are the reason for the regime model in Project 4. There is no sign of seasonality in the changes. This is why Project 1 only uses the seasonal naive method as a check, and why Project 3 uses a different series for harmonic regression.
 
 ## Temperature series for Project 3 {#sec-temp-data}
 
@@ -285,7 +285,7 @@ forecast::ggseasonplot(temp_ts) +
   labs(title = "Seasonal plot: one line per year", x = NULL, y = "degrees Fahrenheit")
 ```
 
-Temperatures follow a strong and regular annual cycle, from about 39°F to 40°F in winter to about 60°F to 62°F in July and August on average. The seasonal plot shows that the shape of the cycle is similar every year: lowest in January or February, rising steadily to a peak in July or August, and falling through the autumn. Individual years differ mainly by a few degrees. The most unusual month is February 1929, the coldest in the series at 31.3°F, and the warmest summers, such as 1921 and 1934, reach about 66°F. There is no visible trend in the time plot.
+The temperature has a strong and regular yearly cycle, from about 39°F to 40°F in winter up to about 60°F to 62°F in July and August on average. The seasonal plot shows that the shape of the cycle is about the same every year: lowest in January or February, rising steadily to a peak in July or August, and falling through autumn. Years mostly differ by only a few degrees. The most unusual month is February 1929, the coldest month in the series at 31.3°F, and the warmest summers, like 1921 and 1934, reach about 66°F. There is no visible trend.
 
 ```{r}
 #| echo: true
@@ -301,7 +301,7 @@ tibble(month = factor(month.abb[cycle(y_train)], levels = month.abb), temp = as.
   kable(caption = "Monthly temperature summaries, training set 1920 to 1937 (degrees Fahrenheit).")
 ```
 
-The coldest month on average is February (39.0°F) and the warmest is July (62.1°F), a seasonal range of about 23°F. The standard deviation across years ranges from 1.7°F in April to 3.0°F in December, and tends to be larger in winter and July than in spring and autumn, so the largest variance is about three times the smallest. With only 18 years per month these standard deviations are imprecise, so this is weak evidence against a constant variance, but it is worth checking in the residuals of the Project 3 models.
+February is the coldest month on average (39.0°F) and July is the warmest (62.1°F), so the seasonal range is about 23°F. The standard deviation across years goes from 1.7°F in April to 3.0°F in December. It tends to be bigger in winter and July than in spring and autumn, and the biggest variance is about three times the smallest. There are only 18 years for each month, so these standard deviations are not very precise and this is only weak evidence that the variance changes through the year. It is still worth checking in the residuals in Project 3, because the harmonic regression assumes a constant error variance.
 
 ```{r}
 #| echo: true
@@ -331,7 +331,7 @@ summary(trend_fit)$coefficients["year", , drop = FALSE] |>
   kable(caption = "Linear trend in the annual means (degrees Fahrenheit per year).")
 ```
 
-The annual means vary between about 47.3°F (1922) and 50.7°F (1921). The fitted slope is 0.047°F per year with a standard error of 0.041 (t = 1.14, p = 0.27), so there is no evidence of a linear trend over 1920 to 1937. With 18 annual means the test has little power, so this shows only that any trend is small relative to the variation between years, not that there is none. The annual means also do not wander in the way a unit root would produce, which supports a constant mean with stationary ARMA errors (d = 0) in Project 3.
+The annual means range from about 47.3°F (1922) to 50.7°F (1921). The fitted slope is 0.047°F per year with a standard error of 0.041 (t = 1.14, p = 0.27), so there is no evidence of a linear trend from 1920 to 1937. With only 18 annual means the test is weak, so this does not prove there is no trend, only that any trend is small compared with how much the years differ from each other. The annual means also do not wander the way they would with a unit root. This supports using a constant mean with stationary ARMA errors (d = 0) in Project 3.
 
 ```{r}
 #| echo: true
@@ -349,7 +349,7 @@ forecast::ggAcf(anom, lag.max = 36) +
   labs(title = "ACF of the monthly anomalies")
 ```
 
-The ACF of the series is dominated by the annual cycle: it is about 0.8 to 0.87 at lags 12, 24 and 36 and about -0.85 at lags 6, 18 and 30, and it barely decays. This is the pattern a deterministic seasonal component produces, and it hides any other dependence. Once each month's mean is removed, the anomalies have autocorrelations of about 0.27 at lag 1 and 0.16 at lag 2, both outside the bounds, so a warm month tends to be followed by another warm month. Four later lags (12, 24, 28 and 34, all about 0.15 to 0.17 in absolute value) cross the bounds, slightly more than the roughly two expected by chance, but with mixed signs and no consistent pattern. The short-run dependence suggests a low-order autoregressive model for the errors, such as AR(1) or AR(2).
+The ACF of the series is dominated by the yearly cycle. It is about 0.8 to 0.87 at lags 12, 24 and 36 and about -0.85 at lags 6, 18 and 30, and it hardly dies out. This is what a fixed seasonal pattern looks like, and it hides any other autocorrelation. After taking away each month's average, the anomalies have autocorrelations of about 0.27 at lag 1 and 0.16 at lag 2, both outside the bounds. So a warmer than usual month tends to be followed by another warmer than usual month. Four later lags (12, 24, 28 and 34) cross the bounds, a bit more than the two or so expected by chance, but they have mixed signs and no clear pattern. The short-term autocorrelation points to a low-order AR model for the errors, such as AR(1) or AR(2).
 
 # Projects {#sec-projects}
 
@@ -362,14 +362,14 @@ The ACF of the series is dominated by the annual cycle: it is about 0.8 to 0.87 
 - Question: does a fitted ARIMA model forecast the yield more accurately than simple benchmarks, and at which horizons?
 - Data: monthly SA 10-year bond yield from March 1975 (see [Data](#sec-data))
 - Methods: naive, drift and seasonal naive benchmarks, non-seasonal ARIMA, expanding-window rolling-origin evaluation at horizons of 1 to 12 months, residual diagnostics
-- Key findings: ARIMA(0,1,1) beats the naive forecast only one month ahead, with an RMSE 2.7% lower (0.372 against 0.382 percentage points). From three months on the naive forecast is as accurate or slightly more accurate, drift is worse at every horizon, and the seasonal naive method is far worse at short horizons. The yield behaves close to a random walk, with a small positive correlation between consecutive monthly changes.
-- What I would do differently: test whether the accuracy differences are statistically significant, for example with a Diebold-Mariano test, and compare the expanding window with a sliding window to see whether the older data help or hurt.
+- Key findings: ARIMA(0,1,1) only beats the naive forecast one month ahead, where its RMSE is 2.7% lower (0.372 against 0.382 percentage points). From three months ahead the naive forecast is as good or slightly better, drift is worse at every horizon, and seasonal naive is much worse at short horizons. The yield behaves almost like a random walk, with a small positive correlation between one month's change and the next.
+- What I would do differently: I would test whether the differences in accuracy are significant, for example with a Diebold-Mariano test, and compare the expanding window with a sliding window to see whether the older data help.
 
 ### Analysis
 
 The comparison is between the naive (random walk) forecast, the drift method, a non-seasonal ARIMA model and, as a deliberate check for seasonality, the seasonal naive method. All are evaluated by rolling-origin cross-validation on the yield in levels.
 
-An expanding window refits each model on all data up to the forecast origin. This is how a forecaster with the full history would work, and it uses as much data as possible for each estimate. A sliding window would adapt faster to regime changes but would discard data that still carry information about the MA coefficient. The 240-month (20-year) initial window, March 1975 to February 1995, gives a stable first estimate and still leaves 365 forecast origins. The naive forecast is the natural benchmark for a series with a unit root, the drift method tests whether a linear trend in the level helps, and the seasonal naive method checks for seasonality. The mean forecast is omitted because the exploratory analysis indicates a unit root, so the historical mean is not a level the yield returns to.
+I use an expanding window, which means each model is refitted on all the data up to the forecast origin. This is what a forecaster with the full history would do, and it uses as much data as possible. A sliding window would adapt faster to new regimes, but it would throw away data that still help to estimate the MA coefficient. The first window is 240 months (20 years), from March 1975 to February 1995. This gives a stable first estimate and still leaves 365 forecast origins. The naive forecast is the natural benchmark for a series with a unit root, the drift method checks whether a linear trend helps, and the seasonal naive method checks for seasonality. I leave out the mean forecast, because the EDA shows a unit root, so the yield does not return to its historical mean.
 
 ```{r}
 #| echo: true
@@ -408,7 +408,7 @@ za_ts |>
   fabletools::report()
 ```
 
-The cross-validation uses ARIMA(0,1,1) without a constant. The order is fixed across origins, while the coefficients are re-estimated at every origin. This matches the order selected on the initial window, and the automatic selection also chose no constant. In a model for the differenced series a constant is a drift, which extrapolates the average monthly change in a straight line. Over the full sample the average change is -0.001 percentage points per month, effectively zero, while over the initial window the yield rose from about 9.5% to about 16%, so a drift fitted there would project rises that did not continue. The higher RMSE of the drift method at long horizons, shown below, is consistent with this.
+The cross-validation uses ARIMA(0,1,1) without a constant. The order is fixed across origins, while the coefficients are re-estimated at every origin. This is the same order that was selected on the first window, and the automatic selection also chose no constant. For a differenced series a constant acts as a drift, which carries the average monthly change forward in a straight line. Over the full sample the average change is -0.001 percentage points per month, which is basically zero. Over the first window the yield went up from about 9.5% to about 16%, so a drift estimated there would predict rises that did not carry on. The drift method's higher RMSE at long horizons, shown below, fits with this.
 
 ```{r}
 #| echo: true
@@ -467,7 +467,7 @@ cv_acc |>
   kable(caption = "Cross-validated RMSE by horizon (percentage points).")
 ```
 
-At one month ahead ARIMA(0,1,1) is the most accurate method, with an RMSE of 0.372 percentage points, 2.7% lower than the naive forecast (0.382) and 3.1% lower than drift (0.383). At three months ARIMA and naive are equal (0.737). At six and twelve months the naive forecast is best, by about 1% over ARIMA (1.013 against 1.024, and 1.184 against 1.194), with drift worse again (1.033 and 1.233). The seasonal naive method is far worse at short horizons, with an RMSE of 1.230 at one month, more than three times the naive RMSE. At twelve months it equals the naive RMSE exactly, because the seasonal naive forecast twelve months ahead is the last observation, which is also the naive forecast. RMSE grows with the horizon for every method, as expected for a series with a unit root.
+One month ahead, ARIMA(0,1,1) is the most accurate with an RMSE of 0.372 percentage points. This is 2.7% lower than the naive forecast (0.382) and 3.1% lower than drift (0.383). Three months ahead, ARIMA and naive are equal (0.737). At six and twelve months naive is best, about 1% better than ARIMA (1.013 against 1.024, and 1.184 against 1.194), and drift is worse again (1.033 and 1.233). Seasonal naive is much worse at short horizons, with an RMSE of 1.230 one month ahead, more than three times that of naive. At twelve months it gives exactly the same RMSE as naive, because the seasonal naive forecast twelve months ahead is the last observation, which is also the naive forecast. The RMSE goes up with the horizon for every method, as expected for a series with a unit root.
 
 ```{r}
 #| echo: true
@@ -503,7 +503,7 @@ cv_acc |>
   labs(title = "RMSE relative to the naive forecast", x = "Months ahead", y = "Relative RMSE", linetype = NULL)
 ```
 
-Only ARIMA beats the naive forecast, and only at one month, where its relative RMSE is about 0.97. From two months on it is within about 1% of the naive forecast. This follows from the MA(1) structure: the ARIMA forecast differs from the naive forecast only by a fraction of the last one-step error, and beyond one month it stays flat at that adjusted level, so its advantage is confined to the first month. Drift is worse than naive at every horizon, and its relative RMSE rises to about 1.04 at twelve months as the extrapolated trend accumulates. Beyond one month the yield is close to unpredictable from its own past. The differences are also small enough that a formal test would be needed before claiming that any method is more accurate.
+Only ARIMA beats the naive forecast, and only one month ahead, where its relative RMSE is about 0.97. From two months ahead it is within about 1% of naive. This comes from the MA(1) part of the model. The ARIMA forecast is the naive forecast plus a fraction of the last forecast error, and after the first month the forecast stays flat, so the benefit only shows up in the first month. Drift is worse than naive at every horizon, and its relative RMSE grows to about 1.04 at twelve months as the trend adds up. So beyond one month, the yield's own past says very little about where it is going. The differences are also small, so a formal test would be needed before saying that one method is better.
 
 The ARIMA model is then fitted to the full sample for diagnostics and a forecast.
 
@@ -525,7 +525,7 @@ tidy(fit_full) |>
   kable(caption = "Full sample ARIMA estimates.")
 ```
 
-The full-sample estimate is θ = 0.343 with a standard error of 0.040, giving an approximate 95% interval of 0.27 to 0.42, so the coefficient is clearly positive. It implies a lag 1 autocorrelation of θ/(1 + θ²) ≈ 0.31 in the monthly changes, close to the sample value of 0.28, and since |θ| < 1 the model is invertible. A positive θ means that a surprise this month is partly continued next month: a surprise rise of 1 percentage point raises the forecast of next month's yield by a further 0.34 percentage points above this month's value. One possible source of this correlation is averaging. The OECD describes its long-term rates as generally averages of daily rates (OECD, n.d.), and Working (1960) showed that changes in averages of a random walk have a lag 1 autocorrelation of about 0.25, close to what is observed here. The estimate is lower than on the initial window (0.42), which may reflect sampling variation or a weaker effect after 1995.
+The full-sample estimate is θ = 0.343 with a standard error of 0.040, which gives an approximate 95% interval of 0.27 to 0.42, so the coefficient is clearly positive. It implies a lag 1 autocorrelation in the monthly changes of θ/(1 + θ²) ≈ 0.31, which is close to the 0.28 in the data, and since |θ| < 1 the model is invertible. A positive θ means that part of a surprise this month carries into next month. For example, if the yield rises 1 percentage point more than expected, the forecast for next month is 0.34 percentage points above this month's value. One possible reason for this is averaging. The OECD says its long-term rates are generally averages of daily rates (OECD, n.d.), and Working (1960) showed that the changes in averages of a random walk have a lag 1 autocorrelation of about 0.25, which is close to what I find. The estimate is lower than on the first window (0.42), which could be sampling variation or a weaker effect after 1995.
 
 ```{r}
 #| echo: true
@@ -543,7 +543,7 @@ augment(fit_full) |>
   kable(caption = "Ljung-Box test on the ARIMA residuals.")
 ```
 
-The residual ACF shows no structure: only lag 9 (about -0.10) crosses the bounds, which is expected by chance among 36 lags. The Ljung-Box test on 12 lags, with 11 degrees of freedom after allowing for the MA coefficient, gives Q = 12.30 and p = 0.34, so there is no evidence of remaining autocorrelation. The residuals are centred on zero and roughly symmetric but have heavier tails than a normal distribution, with outliers of about -2.1 in 1998 and +1.9 in 2020. The time plot shows clusters of large residuals in the mid-1980s, around 1998 and in 2020. The residuals therefore look uncorrelated but not independent and identically normally distributed, which affects the prediction intervals rather than the point forecasts.
+The residual ACF shows no pattern. Only lag 9 (about -0.10) crosses the bounds, which is expected by chance with 36 lags. The Ljung-Box test on 12 lags (11 degrees of freedom after allowing for the MA coefficient) gives Q = 12.30 and p = 0.34, so there is no evidence of autocorrelation left in the residuals. The residuals are centred on zero and fairly symmetric, but have heavier tails than a normal distribution, with outliers of about -2.1 in 1998 and +1.9 in 2020. The time plot shows clusters of large residuals in the mid-1980s, around 1998 and in 2020. So the residuals look uncorrelated, but they are not independent and normally distributed with a constant variance. This does not affect the point forecasts, but it does affect the prediction intervals.
 
 ```{r}
 #| echo: true
@@ -562,11 +562,11 @@ These prediction intervals assume a constant innovation variance, which the expl
 
 ### Discussion
 
-At a monthly frequency the yield is close to a random walk. ARIMA(0,1,1) captures a small positive correlation between consecutive monthly changes and improves on the naive forecast by about 3% one month ahead, but not beyond, and neither a drift nor a seasonal pattern helps.
+At a monthly level the yield behaves almost like a random walk. ARIMA(0,1,1) picks up a small positive correlation between one month's change and the next, and improves on the naive forecast by about 3% one month ahead, but not after that. Neither drift nor seasonality helps.
 
-Three limitations apply. First, forecasts from neighbouring origins are based on almost the same data and overlap in the months they forecast, so their errors are correlated and the 365 origins carry less information than their number suggests; the RMSE differences have not been tested formally. Second, the order (0,1,1) was fixed across origins, so the comparison does not reflect uncertainty in model selection. Third, the prediction intervals assume a constant innovation variance, which the residuals contradict, so the intervals are likely too wide in calm periods and too narrow after large shocks.
+There are three main limitations. First, forecasts from origins next to each other use almost the same data and cover overlapping months, so their errors are correlated. This means the 365 origins contain less information than the number suggests, and I have not formally tested the RMSE differences. Second, I kept the order fixed at (0,1,1) at every origin, so the comparison ignores the uncertainty in choosing the model. Third, the prediction intervals assume a constant variance, which the residuals show is not true, so the intervals are likely too wide in calm periods and too narrow after big shocks.
 
-Natural extensions are a Diebold-Mariano test of the accuracy differences, re-selecting the order at each origin, and combining the mean model with the GARCH variance model of [Project 2](#sec-project-2) so that the prediction intervals widen and narrow with volatility.
+Possible extensions are a Diebold-Mariano test of the accuracy differences, choosing the order again at each origin, and combining the mean model with the GARCH model from [Project 2](#sec-project-2) so that the prediction intervals get wider and narrower with volatility.
 
 ## Project 2: Volatility of bond yield changes {#sec-project-2}
 
@@ -577,8 +577,8 @@ Natural extensions are a Diebold-Mariano test of the accuracy differences, re-se
 - Question: is the variance of monthly yield changes time-varying, and which GARCH specification describes it best?
 - Data: monthly changes in the SA 10-year bond yield from April 1975
 - Methods: ARMA mean model chosen by information criteria, Ljung-Box and Engle LM tests for ARCH effects, GARCH(1,1) and GJR-GARCH(1,1) with normal and Student t innovations fitted jointly with the mean, robust standard errors, standardised residual diagnostics, news impact curves, volatility forecasts
-- Key findings: monthly yield changes show clear ARCH effects (Engle LM test, p < 0.001). GARCH(1,1) with Student t innovations, with about 5.3 degrees of freedom, is preferred by the likelihood, AIC and BIC, and removes the ARCH effects. Volatility is moderately persistent, with a half-life of about 7.5 months, and there is no evidence that rises and falls in the yield affect volatility differently.
-- What I would do differently: refit the chosen model on subsamples to check whether the persistence partly reflects shifts in volatility between eras, and compare the models on out-of-sample volatility forecasts rather than in-sample fit alone.
+- Key findings: monthly yield changes show clear ARCH effects (Engle LM test, p < 0.001). GARCH(1,1) with Student t errors (about 5.3 degrees of freedom) fits best by the log-likelihood, AIC and BIC, and removes the ARCH effects. Volatility is fairly persistent, with a half-life of about 7.5 months, and there is no evidence that rises and falls in the yield affect volatility differently.
+- What I would do differently: I would refit the chosen model on parts of the sample to check whether the persistence is partly caused by shifts in volatility between eras, and compare the models on how well they forecast volatility out of sample, not just on in-sample fit.
 
 ### Analysis
 
@@ -593,7 +593,7 @@ library(rugarch)
 library(FinTS)
 ```
 
-The series modelled is the monthly change in the yield, in percentage points, from April 1975 onwards. Changes in percentage points are the usual measure for yields, since the price change of a bond is approximately proportional to the change in its yield. Log changes measure relative changes, which assumes that the size of a change scales with the level of the yield. Over this sample the yield ranges from about 7% to 18%, so log changes would shrink the changes of the 1980s and 1990s relative to later years and build a level effect into the volatility, which is something to test rather than assume. Percentage point changes also keep the units consistent with Projects 1 and 4.
+The series modelled is the monthly change in the yield, in percentage points, from April 1975 onwards. I use changes in percentage points because that is the normal way to measure changes in yields, and a bond's price change is roughly proportional to the change in its yield. Log changes measure relative changes, which assumes that changes get bigger when the yield is higher. The yield ranges from about 7% to 18% in this sample, so log changes would shrink the changes in the 1980s and 1990s compared with later years and build a level effect into the volatility. That is something to test, not assume. Percentage points also keep the units the same as in Projects 1 and 4.
 
 ```{r}
 #| echo: true
@@ -616,7 +616,7 @@ expand_grid(p = 0:2, q = 0:2) |>
   kable(caption = "Candidate ARMA(p, q) mean models for the yield changes.")
 ```
 
-The mean model is MA(1), chosen from the ACF of the changes in the exploratory analysis. Both criteria support it: MA(1) has the lowest BIC (511.9) and the lowest AIC (498.7). The next best models by BIC, MA(2) and ARMA(1,1), are about 5.4 higher, and the white noise model is about 56 higher.
+The mean model is MA(1), chosen from the ACF of the changes in the EDA. Both criteria agree with this: MA(1) has the lowest BIC (511.9) and the lowest AIC (498.7). The next best models by BIC, MA(2) and ARMA(1,1), are about 5.4 higher, and the white noise model is about 56 higher.
 
 ```{r}
 #| echo: true
@@ -653,7 +653,7 @@ za_res |>
   labs(title = "ACF of squared mean model residuals")
 ```
 
-The residuals of the MA(1) model show no autocorrelation: every lag up to 24 is inside the bounds except lag 9 (about -0.10), which is borderline. The squared residuals behave differently. Their autocorrelations are about 0.15, 0.15, 0.13 and 0.12 at lags 1 to 4, all outside the bounds, and close to zero after that. Large changes of either sign tend to be followed by large changes for a few months, which is volatility clustering.
+The residuals of the MA(1) model show no autocorrelation. Every lag up to 24 is inside the bounds except lag 9 (about -0.10), which is borderline. The squared residuals are different. Their autocorrelations are about 0.15, 0.15, 0.13 and 0.12 at lags 1 to 4, all outside the bounds, and close to zero after that. So big changes, up or down, tend to be followed by more big changes for a few months. This is volatility clustering.
 
 ```{r}
 #| echo: true
@@ -676,7 +676,7 @@ tibble(
   kable(caption = "Tests on the residuals of the mean model.")
 ```
 
-The Ljung-Box test on the residuals (Q = 12.29, 11 degrees of freedom, p = 0.34) does not reject the null of no autocorrelation, so the MA(1) mean model is adequate. The Ljung-Box test on the squared residuals (Q = 50.1, 12 degrees of freedom, p < 0.001) and Engle's LM test (33.4, 12 degrees of freedom, p < 0.001) both reject the null of no ARCH effects. The conditional variance of the changes is therefore time-varying, which justifies fitting GARCH models.
+The Ljung-Box test on the residuals (Q = 12.29, 11 degrees of freedom, p = 0.34) does not reject no autocorrelation, so the MA(1) mean model is fine. The Ljung-Box test on the squared residuals (Q = 50.1, 12 degrees of freedom, p < 0.001) and Engle's LM test (33.4, 12 degrees of freedom, p < 0.001) both reject no ARCH effects. So the variance of the changes moves over time, which is why I fit GARCH models.
 
 ```{r}
 #| echo: true
@@ -692,7 +692,7 @@ tibble(e = e_hat) |>
   labs(title = "Normal quantile plot of mean model residuals", x = "Theoretical quantile", y = "Sample quantile")
 ```
 
-The points follow the line in the centre but bend away at both ends in an S shape: the largest fall and rise, about -2.2 and +1.9 percentage points, sit at theoretical quantiles near -3 and +3, far beyond what a normal distribution with the same spread allows. The residuals are therefore heavy-tailed. Part of this can come from the time-varying variance itself, since a mixture of normal distributions with different variances has heavier tails than a single normal. Whether a GARCH model with normal innovations accounts for all of it is checked below by comparing normal and Student t innovations.
+The points follow the line in the middle but bend away at both ends, in an S shape. The biggest fall and rise (about -2.2 and +1.9 percentage points) sit at theoretical quantiles near -3 and +3, much further out than a normal distribution allows. So the residuals have heavy tails. Some of this can come from the changing variance itself, because mixing normal distributions with different variances gives heavier tails than one normal. To see whether a GARCH model with normal errors is enough, I compare normal and Student t errors below.
 
 Four variance models are fitted, each jointly with the ARMA mean: GARCH(1,1) and GJR-GARCH(1,1), each with normal and Student t innovations.
 
@@ -737,7 +737,7 @@ imap_dfr(garch_fits, \(f, nm) {
   kable(caption = "Estimates with robust standard errors.")
 ```
 
-The mean equation is almost the same in all four models: the MA(1) coefficient is about 0.31 (robust standard error about 0.04), close to the 0.34 in Project 1, and the constant mu is not significantly different from zero. In the GARCH t model, alpha1 = 0.19 (robust standard error 0.07) measures how strongly the variance reacts to last month's squared shock, and beta1 = 0.72 (0.11) measures how much of last month's variance carries over. With normal innovations alpha1 is similar (0.21) but beta1 is much lower (0.48), so volatility dies out faster. A likely reason is that the normal model must explain extreme months through spikes in the variance, which then have to decay quickly, while the t distribution can treat some of them as draws from its heavier tails. The asymmetry term gamma1 is close to zero with a large standard error in both GJR models (0.007 with standard error 0.11, and 0.004 with standard error 0.08, both p > 0.95), so there is no evidence of asymmetry. The t degrees of freedom are about 5.3 (robust standard error 1.5), which indicates heavy tails. The fourth moment exists when the degrees of freedom exceed 4, and the implied excess kurtosis of the innovations is 6/(5.3 - 4) ≈ 4.6, although this is imprecise given the standard error.
+The mean part is almost the same in all four models. The MA(1) coefficient is about 0.31 (robust standard error about 0.04), close to the 0.34 in Project 1, and mu is not significantly different from zero. In the GARCH t model, alpha1 = 0.19 (robust standard error 0.07) shows how strongly the variance reacts to last month's shock, and beta1 = 0.72 (0.11) shows how much of last month's variance carries over. With normal errors alpha1 is similar (0.21) but beta1 is much lower (0.48), so volatility dies out faster. A likely reason is that the normal model has to explain extreme months with spikes in the variance that then have to fade quickly, while the t distribution can treat some of them as draws from its heavier tails. The asymmetry term gamma1 is close to zero with a large standard error in both GJR models (0.007 with standard error 0.11, and 0.004 with standard error 0.08, both p > 0.95), so there is no evidence of asymmetry. The t degrees of freedom are about 5.3 (robust standard error 1.5), which means heavy tails. This implies an excess kurtosis of about 6/(5.3 - 4) ≈ 4.6 in the errors, but with this standard error that number is very rough.
 
 ```{r}
 #| echo: true
@@ -760,7 +760,7 @@ imap_dfr(garch_fits, \(f, nm) tibble(
   kable(caption = "Model comparison.")
 ```
 
-All three criteria prefer the Student t models. Replacing the normal with the t distribution raises the log-likelihood by about 26 for one extra parameter, and lowers AIC from 0.712 to 0.629 and BIC from 0.748 to 0.672 (rugarch reports both per observation). Adding the asymmetry term changes the log-likelihood by less than 0.01 and raises both criteria, so GARCH t is preferred overall. Persistence (alpha1 + beta1) is 0.91 in the t models, so the gap between the conditional and the long-run variance halves in about 7.5 months. In the normal models it is 0.69, a half-life of about 1.9 months. The long-run standard deviation of the GARCH t model, 0.40 percentage points, is close to the sample standard deviation of the changes (0.38). A persistence of 0.91 is not close enough to one to suggest an integrated GARCH, but shifts in the average level of volatility between eras can still inflate estimated persistence, so refitting on subsamples would be a useful check.
+All three criteria prefer the Student t models. Switching from normal to t errors raises the log-likelihood by about 26 for one extra parameter, and lowers AIC from 0.712 to 0.629 and BIC from 0.748 to 0.672 (rugarch reports both per observation). Adding the asymmetry term changes the log-likelihood by less than 0.01 and makes both criteria worse, so GARCH t is the best overall. Persistence (alpha1 + beta1) is 0.91 in the t models, which means the gap between the current variance and its long-run level halves in about 7.5 months. In the normal models persistence is 0.69, a half-life of about 1.9 months. The long-run standard deviation of the GARCH t model is 0.40 percentage points, close to the 0.38 in the data. A persistence of 0.91 is not close enough to one to point to an integrated GARCH, but shifts in the overall level of volatility between eras can push estimated persistence up, so refitting on parts of the sample would be a useful check.
 
 ```{r}
 #| echo: true
@@ -782,7 +782,7 @@ imap_dfr(garch_fits, \(f, nm) {
   kable(caption = "Diagnostic p-values: Ljung-Box on z, Ljung-Box on z squared, ARCH LM on z.")
 ```
 
-The four models give almost identical diagnostics. The Ljung-Box test on the standardised residuals (p ≈ 0.44) shows no remaining autocorrelation in the mean, and the Ljung-Box test on their squares and the ARCH LM test (p ≈ 0.998) show no remaining ARCH effects. Every model removes the volatility clustering found in the mean model residuals, so the diagnostics do not distinguish between them, and the choice rests on the likelihood and the fit in the tails.
+All four models give almost the same diagnostics. The Ljung-Box test on the standardised residuals (p ≈ 0.44) shows no autocorrelation left in the mean, and the Ljung-Box test on their squares and the ARCH LM test (p ≈ 0.998) show no ARCH effects left. Every model removes the volatility clustering, so the diagnostics cannot separate them, and the choice comes down to the likelihood and how well each fits the tails.
 
 ```{r}
 #| echo: true
@@ -805,7 +805,7 @@ imap_dfr(garch_fits, \(f, nm) {
   labs(title = "Quantile plots of standardised residuals", x = "Theoretical quantile", y = "Sample quantile")
 ```
 
-The Student t fits the tails better. Under the normal models the largest standardised residuals lie well above the line, at about 4.2 and 6.8 against theoretical values below 3.2, while under the t models the points stay close to the line except for the single largest value. That one month is extreme under every model, at about 7 to 8 standard deviations, so even the t distribution does not fully capture the largest shock, most likely the rise in early 2020 that followed a calm period.
+The Student t fits the tails better. With normal errors the largest standardised residuals sit well above the line, at about 4.2 and 6.8 against theoretical values below 3.2. With t errors the points stay close to the line apart from the single largest value. That one month is extreme under every model, at about 7 to 8 standard deviations, so even the t distribution does not fully capture it. It is most likely the rise in early 2020, which came after a calm period.
 
 ```{r}
 #| echo: true
@@ -823,9 +823,9 @@ map_dfr(c("GARCH t", "GJR t"), \(nm) {
   labs(title = "News impact curves", x = "Shock at t - 1", y = "Conditional variance at t")
 ```
 
-There is no evidence of asymmetry: the two news impact curves lie on top of each other and are symmetric about zero, consistent with gamma1 being close to zero. In the rugarch GJR model the extra term applies to negative shocks, which for a yield are unexpected falls, that is, rises in bond prices. A common hypothesis is that unexpected rises in yields, which mean losses for bondholders, raise volatility more, which would give a negative gamma1. The estimates support neither direction.
+There is no evidence of asymmetry. The two news impact curves lie on top of each other and are symmetric around zero, which matches gamma1 being close to zero. In rugarch's GJR model the extra term applies to negative shocks, which for a yield are unexpected falls, in other words rises in bond prices. A common idea is that unexpected rises in yields, which mean losses for bondholders, increase volatility more, which would give a negative gamma1. The estimates do not support either direction.
 
-The remaining chunks use the GARCH(1,1) model with Student t innovations. It has the lowest AIC and BIC of the four models. GJR t has a log-likelihood higher by only about 0.001, because its asymmetry term is negligible and only adds a parameter. The diagnostics are equally good for all four models, and the t innovations fit the tails better than the normal.
+The remaining chunks use the GARCH(1,1) model with Student t errors. It has the lowest AIC and BIC of the four models. GJR t has a log-likelihood that is only about 0.001 higher, because its asymmetry term adds almost nothing apart from an extra parameter. All four models pass the diagnostics equally well, and the t errors fit the tails better than the normal.
 
 ```{r}
 #| echo: true
@@ -849,7 +849,7 @@ tibble(
   labs(title = paste("Yield changes with two conditional SD band:", chosen), x = NULL, y = "percentage points")
 ```
 
-The two standard deviation band is narrowest, at about ±0.5 percentage points, in the late 1970s and for much of the 2000s and 2010s. It widens sharply after large shocks: in the early and mid-1980s, around 1998, when the lower band reaches about -2.9, and in 2020, when the upper band reaches about 2.3. After each spike the band narrows over several months rather than at once, which is the persistence measured by beta1. The band follows the clusters of large changes in the data, which a constant variance model cannot do.
+The two standard deviation band is narrowest, at about ±0.5 percentage points, in the late 1970s and for most of the 2000s and 2010s. It gets much wider after big shocks: in the early and mid-1980s, around 1998, when the lower band reaches about -2.9, and in 2020, when the upper band reaches about 2.3. After each spike the band narrows over several months rather than straight away, which is the persistence measured by beta1. The band follows the clusters of big changes in the data, which a constant variance model cannot do.
 
 ```{r}
 #| echo: true
@@ -867,15 +867,15 @@ tibble(h = 1:24, sd = as.numeric(sigma(garch_fc))) |>
   labs(title = paste("Forecast conditional SD:", chosen), x = "Months ahead", y = "percentage points")
 ```
 
-The forecast starts at about 0.408 percentage points one month ahead, only slightly above the long-run level of 0.397, so volatility at the end of the sample (June 2026) is close to its long-run average. It declines smoothly towards the long-run level, closing half the remaining gap in the variance about every 7.5 months, and at 24 months (0.398) it has almost reached it. Because the starting level is so close to the long-run level, the forecast adds little to the unconditional standard deviation at any horizon. After a volatile period the forecast would start higher and the rate of reversion would matter more.
+The forecast starts at about 0.408 percentage points one month ahead, only slightly above the long-run level of 0.397. This means volatility at the end of the sample (June 2026) is close to normal. The forecast falls smoothly towards the long-run level, closing half of the remaining gap in the variance about every 7.5 months, and by 24 months (0.398) it has almost reached it. Because it starts so close to the long-run level, the forecast does not say much more than the long-run standard deviation at any horizon. After a volatile period it would start higher and the speed of the decay would matter more.
 
 ### Discussion
 
-Monthly changes in the South African 10-year yield have a time-varying conditional variance. GARCH(1,1) with Student t innovations describes it well: it removes the ARCH effects, fits the tails better than normal innovations, and shows volatility that rises after large shocks and then decays, with a half-life of about 7.5 months. There is no evidence of asymmetry.
+The monthly changes in the South African 10-year yield have a variance that changes over time. GARCH(1,1) with Student t errors describes this well. It removes the ARCH effects, fits the tails better than normal errors, and shows volatility rising after big shocks and then fading, with a half-life of about 7.5 months. There is no evidence of asymmetry.
 
-Several limitations apply. Monthly data, and especially monthly averages, smooth out movements within the month, so the model describes volatility at a monthly scale only. The sample spans several monetary regimes, and a GARCH model with fixed parameters treats shifts in the average level of volatility as persistent shocks, which may overstate persistence. The model was also chosen on in-sample fit rather than forecasting performance.
+There are some limitations. Monthly data, and especially monthly averages, smooth out what happens within each month, so the model only describes volatility at a monthly scale. The sample covers several monetary regimes, and a GARCH model with fixed parameters treats shifts in the overall level of volatility as long-lasting shocks, which may overstate persistence. I also chose the model on in-sample fit rather than on how well it forecasts.
 
-[Project 4](#sec-project-4) takes a different view. Instead of volatility that evolves smoothly with each shock, it allows the changes to switch between a small number of regimes with different volatilities. Comparing the periods the hidden Markov model assigns to its high-volatility state with the spikes in the GARCH band shows whether the two views agree.
+[Project 4](#sec-project-4) looks at this differently. Instead of volatility that changes smoothly after each shock, it lets the changes switch between a few regimes with different volatilities. Comparing the periods that the hidden Markov model puts in its high-volatility state with the spikes in the GARCH band shows whether the two views agree.
 
 ## Project 3: Harmonic regression for a seasonal temperature series {#sec-project-3}
 
@@ -886,8 +886,8 @@ Several limitations apply. Monthly data, and especially monthly averages, smooth
 - Question: how many harmonic terms does the annual temperature cycle need, and does a harmonic regression with ARMA errors forecast as well as a SARIMA model?
 - Data: average monthly air temperature at Nottingham Castle, 1920 to 1939, in degrees Fahrenheit (R dataset `nottem`, 240 months), with the last 24 months held out
 - Methods: periodogram, harmonic regression with K = 0 to 6 Fourier pairs and ARMA errors chosen by AICc, SARIMA baseline, test-set accuracy and prediction interval coverage
-- Key findings: **key findings**
-- What I would do differently: **what you would do differently next time**
+- Key findings: the yearly cycle holds about 84% of the power in the periodogram. AICc picks K = 4 harmonics with AR(2) errors, but K = 2 and K = 3 are almost as good. On the 24 test months the harmonic regression is slightly more accurate than the SARIMA (RMSE 2.35 against 2.36°F), and its 95% intervals cover 22 of the 24 months against 23 for the SARIMA, so the two models perform about the same.
+- What I would do differently: I would use rolling-origin evaluation over several years instead of one 24-month window, and try a model where the seasonal pattern can change slowly over time, such as the trigonometric seasonal model from Tutorial 3.
 
 ### Analysis
 
@@ -902,7 +902,7 @@ Several limitations apply. Monthly data, and especially monthly averages, smooth
 library(forecast)
 ```
 
-The bond yield shows virtually no seasonal component, so harmonic terms have nothing to describe there. **Evidence for this, for example the seasonal naive results in Project 1 or a periodogram of the yield changes** This project therefore uses a series with a strong, regular annual cycle, the Nottingham Castle temperature series. Its training and test sets and exploratory analysis are in the [Data](#sec-temp-data) section.
+The bond yield shows no real seasonal pattern, so harmonic terms would have nothing to describe. The ACF of the changes in the EDA has no spikes at lags 12, 24 or 36, and in Project 1 the seasonal naive forecast is more than three times worse than the naive forecast one month ahead. This project therefore uses a series with a strong, regular yearly cycle, the Nottingham Castle temperature series. Its training and test sets and EDA are in the [Data](#sec-temp-data) section.
 
 ```{r}
 #| echo: true
@@ -955,7 +955,7 @@ pg_tbl |>
   kable(caption = "Periodogram ordinates at the seasonal frequencies.")
 ```
 
-The two tables show where the power sits and how much of it falls at the seasonal frequencies j/12 that the Fourier terms use. **Interpretation of the periodogram: the dominant period in months, whether the smaller peaks are harmonics of the annual cycle (2, 3, ... cycles per year) or separate cycles, and how much of the variance sits at the seasonal frequencies**
+The two tables show where the power sits and how much of it falls at the seasonal frequencies j/12 that the Fourier terms use. The periodogram has one very large peak at 1 cycle per year, a period of 12 months, which holds 84% of the total power. The next biggest peak is at 2 cycles per year (6 months), with 1.5%. This is not a separate cycle but the second harmonic of the yearly cycle, which is needed because the yearly cycle is not a perfect sine wave. The other large values (0.83 to 1.11 cycles per year) sit right next to the main peak and come from power spilling over from it (leakage), not from separate cycles. The harmonics at 3 to 6 cycles per year are small, between 0.05% and 0.15% each. Together the six seasonal frequencies hold about 86% of the power. This suggests that one or two harmonics should capture most of the cycle.
 
 ```{r}
 #| echo: true
@@ -1019,7 +1019,7 @@ tibble(term = names(coef(fit_hr)),
   kable(caption = paste0("Harmonic regression with ARMA errors, K = ", K_best, "."))
 ```
 
-The number of harmonics is chosen by AICc among K = 1 to 6, with K = 0 shown in the table for reference. **Interpretation of the AICc table and the coefficients: how many harmonics the annual cycle needs, what that says about its shape (a near-sinusoidal cycle needs only one or two), and the ARMA structure left in the errors. Also justify d = 0 from the trend check in the [Data](#sec-temp-data) section rather than assuming it**
+The number of harmonics is chosen by AICc among K = 1 to 6, with K = 0 shown in the table for reference. AICc drops a lot from K = 0 (1082.8) to K = 1 (1010.6) and K = 2 (978.0), and then hardly changes. The lowest AICc is at K = 4 (976.1), but K = 2 is only 2.0 higher and K = 3 only 2.6 higher, so the data cannot really tell these apart. This matches the periodogram: most of the cycle is the first harmonic, and a bit is the second. In the K = 4 model the first harmonic terms are very large (z = -25.9 and -34.6), the second harmonic sine term is clearly significant (z = 7.2), and the third and fourth sine terms are smaller (z = 2.2 and 2.7). All the cosine terms from the second harmonic on are close to zero. The errors are AR(2), with coefficients 0.23 and 0.11, which matches the short-term autocorrelation in the anomalies in the EDA. I use d = 0 because the trend check in the [Data](#sec-temp-data) section found no evidence of a trend or a unit root, so the series can be treated as a fixed seasonal pattern plus stationary errors.
 
 ```{r}
 #| echo: true
@@ -1031,7 +1031,7 @@ The number of harmonics is chosen by AICc among K = 1 to 6, with K = 0 shown in 
 forecast::checkresiduals(fit_hr)
 ```
 
-**Interpretation of the residual diagnostics**
+The residuals look like noise around zero with a fairly constant spread. Most of the ACF is inside the bounds, but lags 12, 24 and about 29 cross (about -0.18, 0.18 and -0.17). The Ljung-Box test on 24 lags gives Q = 30.99 with 22 degrees of freedom and p = 0.096, so there is no evidence of autocorrelation at the 5% level, although it is borderline at 10%. The spikes at lags 12 and 24 suggest the seasonal pattern may change a little from year to year, which a fixed harmonic model cannot capture. The histogram is close to the normal curve, so the normal prediction intervals look reasonable.
 
 ```{r}
 #| echo: true
@@ -1078,7 +1078,7 @@ bind_rows(
   kable(caption = "Forecast accuracy on the training set and the 24-month test set.")
 ```
 
-**Interpretation of test-set accuracy for both models**
+Both models do about equally well on the test set. The harmonic regression has a slightly lower RMSE (2.348 against 2.359°F), MAE (1.690 against 1.802), MAPE (3.56% against 3.81%) and MASE (0.607 against 0.647). The differences are small compared with the size of the errors, and with only 24 test months they could easily be due to chance. Both models have similar errors on the training and test sets (RMSE about 2.2 against 2.35), so neither seems to overfit. The plot shows that both forecasts follow the seasonal cycle closely, and their biggest misses are at the summer peaks, where in 1938 both forecast too high.
 
 ```{r}
 #| echo: true
@@ -1115,11 +1115,15 @@ bind_rows(
   kable(caption = "Width and empirical coverage of the 95% prediction intervals on the test set.")
 ```
 
-**Interpretation of interval width and coverage, noting that 24 test months give only a rough estimate of coverage**
+The two models give similar 95% prediction intervals, with average widths of 9.1°F for the harmonic regression and 9.3°F for the SARIMA. The harmonic regression intervals cover 22 of the 24 test months (91.7%) and the SARIMA intervals cover 23 (95.8%). With only 24 months, one month changes the coverage by about 4 percentage points, so both are consistent with the 95% target and this does not separate the models.
 
 ### Discussion
 
-**Discussion: conclusions, limitations (a single 24-month test window, AICc not comparable across differencing orders, a seasonal shape assumed fixed over time), when harmonic regression is preferable to SARIMA (long or non-integer seasonal periods), and why the method did not suit the bond yield**
+Nottingham temperatures have a strong, regular yearly cycle, and a harmonic regression with a few Fourier terms and AR(2) errors describes it well. Most of the cycle is captured by the first harmonic, with a smaller second harmonic. On the 24 test months the harmonic regression forecasts as well as a SARIMA model, slightly better on every accuracy measure, with similar prediction intervals, and it is simpler to interpret.
+
+There are some limitations. There is only one 24-month test window, so the comparison rests on very few forecasts. AICc can compare the harmonic regressions with each other but not with the SARIMA, because the SARIMA uses a seasonal difference. The harmonic model also assumes the seasonal shape is the same every year, and the residual spikes at lags 12 and 24 suggest it may change a little.
+
+Harmonic regression is most useful when the seasonal period is long or not a whole number, such as 52.18 weeks in weekly data or 365.25 days in daily data, where SARIMA is impractical. It did not suit the bond yield, because the yield has no seasonal pattern for the harmonic terms to describe.
 
 ## Project 4: Hidden Markov model for regimes in yield changes {#sec-project-4}
 
@@ -1129,7 +1133,7 @@ bind_rows(
 - Type: implementation from first principles on real-world data
 - Question: can monthly yield changes be described by a small number of regimes with different means and volatilities, and does a regime model forecast better than an iid normal model?
 - Data: monthly changes in the yield from April 1975, with the last 24 months held out
-- Methods: Gaussian HMM likelihood by the scaled forward algorithm, numerical maximisation from several starting values, number of states chosen by AIC and BIC, Viterbi and forward-backward decoding, mixture forecast distributions, one-step-ahead evaluation by coverage and log score, simulated level forecasts, check against depmixS4
+- Methods: Gaussian HMM likelihood by the scaled forward algorithm, with a lower bound on the state standard deviations, numerical maximisation from several starting values, number of states chosen by AIC and BIC, Viterbi and forward-backward decoding, mixture forecast distributions, one-step-ahead evaluation by coverage and log score, simulated level forecasts, check against depmixS4
 - Key findings: **key findings**
 - What I would do differently: **what you would do differently next time**
 
@@ -1159,7 +1163,7 @@ hist(dy_ts, breaks = 60, freq = FALSE, las = 1, main = "",
 curve(dnorm(x, mean(dy_ts), sd(dy_ts)), add = TRUE, lwd = 2, col = "red")
 ```
 
-**Interpretation: tails and volatility clustering relative to the fitted normal density, and why this motivates a mixture of regimes**
+The histogram is taller in the middle and has longer tails than the fitted normal curve. There are more small changes near zero and more very large changes (beyond about 1 percentage point either way) than a normal distribution with the same mean and standard deviation would give. Together with the volatility clustering in the EDA and in Project 2, this suggests the changes come from a mix of calm and volatile periods. A hidden Markov model with a normal distribution in each state is a mixture of normals that switches over time, so it can produce this shape.
 
 #### Training and test split
 
@@ -1179,12 +1183,17 @@ t_all <- as.numeric(time(dy_ts))
 
 #### Parameter transformations
 
-Means are unconstrained, standard deviations are estimated on the log scale, and the off-diagonal entries of $\Gamma$ use a multinomial logit with the diagonal as reference. $\delta$ is the stationary distribution of $\Gamma$.
+Means are unconstrained, and the off-diagonal entries of $\Gamma$ use a multinomial logit with the diagonal as reference. $\delta$ is the stationary distribution of $\Gamma$. Each standard deviation is estimated as a small floor plus an exponential, $\sigma_i = 0.05 + e^{w_i}$, so it can never go below 0.05 percentage points.
+
+The floor is needed because a normal likelihood has no upper limit when one state has a mean exactly equal to an observation and a standard deviation shrinking to zero. The early part of the sample still has months with no change at all (10% of months in 1975-85), so without the floor the fit puts these months in their own state with a mean of 0 and a standard deviation of 0. My first fit did exactly this: one state had a standard deviation of 0.0000, nlm stopped with code 3 rather than converging, and the log-likelihood (-70.8) was far above that of the depmixS4 fit (-197.2). A floor of 0.05 is far below the standard deviation of a calm month (about 0.25), so it only rules out this degenerate solution and should not affect a sensible fit.
 
 ```{r}
 #| echo: true
 #| warning: false
 #| message: false
+
+# smallest allowed state standard deviation (percentage points)
+sigma_min <- 0.05
 
 n2w <- function(mu, sigma, gamma) {
   m <- length(mu)
@@ -1194,12 +1203,12 @@ n2w <- function(mu, sigma, gamma) {
     tgamma <- log(gamma / diag(gamma))
     tgamma <- tgamma[!diag(m)]
   }
-  c(mu, log(sigma), tgamma)
+  c(mu, log(sigma - sigma_min), tgamma)
 }
 
 w2n <- function(par, m) {
   mu <- par[1:m]
-  sigma <- exp(par[(m + 1):(2 * m)])
+  sigma <- sigma_min + exp(par[(m + 1):(2 * m)])
   gamma <- diag(m)
   if (m > 1) {
     gamma[!gamma] <- exp(par[(2 * m + 1):(m * (m + 1))])
