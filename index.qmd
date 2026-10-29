@@ -1,0 +1,2543 @@
+---
+title: "Time Series Analysis Portfolio"
+subtitle: "Honours Time Series Analysis, University of Cape Town, 2026"
+author: "Alex Holwill (HLWALE001)"
+date: last-modified
+editor: visual
+---
+
+# Overview {#sec-overview}
+
+This portfolio applies the course methods to one real-world series, the South African 10-year government bond yield, and adds worked tutorials, a reflective commentary, a learning journal and an AI use log. Code is folded by default: click "Show code" above any chunk, or use the Code menu at the top of the page to show or hide all of it.
+
+**Overview paragraph: what the portfolio sets out to show and how the four projects build on one another**
+
+| Project | Course section | Type | Brief requirement covered |
+|:-----------------|:-----------------|:-----------------|:-----------------|
+| [1. Forecast comparison](#sec-project-1) | 1 | Implementation | Model comparison, real-world data |
+| [2. Volatility of yield changes](#sec-project-2) | 1 | Implementation | Model comparison, real-world data |
+| [3. Harmonic regression](#sec-project-3) | **confirm section** | Exploration | Model comparison, real-world data |
+| [4. Hidden Markov model](#sec-project-4) | 2 | Implementation from first principles | Computational and statistical programming, real-world data |
+
+**Check against the brief: two projects are required from each section. Projects 1 and 2 use Section 1 material (ARIMA, GARCH) and the periodogram in Project 3 is also Section 1 material, so either confirm that harmonic regression with ARMA errors is Section 2 content or add a second Section 2 project**
+
+Other components: [tutorials and section overviews](#sec-tutorials), [reflective commentary](#sec-reflection), [journal](#sec-journal), [AI use log](#sec-ai-log) and the [reproducibility appendix](#sec-appendix).
+
+# Data {#sec-data}
+
+## Source and access
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# load packages used throughout
+# packages needed by only one project or tutorial are loaded where first used,
+# because forecast and fpp2 mask accuracy() from fabletools, which Project 1 relies on
+
+library(tidyverse)
+library(timetk)
+library(tsibble)
+library(feasts)
+library(fabletools)
+library(tibbletime)
+library(lubridate)
+library(tseries)
+library(knitr)
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# read the FRED csv and rename columns
+
+za_raw <- read_csv("data/IRLTLT01ZAM156N.csv", show_col_types = FALSE) |>
+  rename(date = observation_date, yield = IRLTLT01ZAM156N) |>
+  mutate(date = as.Date(date), yield = as.numeric(yield)) |>
+  arrange(date)
+
+tibble(n = nrow(za_raw),
+  start = min(za_raw$date),
+  end = max(za_raw$date),
+  n_missing = sum(is.na(za_raw$yield))
+) |> kable(caption = "Raw series: number of observations, date range and missing values.")
+
+```
+
+The series is the monthly long-term (10-year) government bond yield for South Africa, in per cent per annum. It is compiled by the OECD and distributed by the Federal Reserve Bank of St. Louis as FRED series [IRLTLT01ZAM156N](https://fred.stlouisfed.org/series/IRLTLT01ZAM156N) under a CC BY 4.0 licence. Download instructions are in the [appendix](#sec-appendix). The series contains no personal information, so POPIA does not apply.
+
+A market-determined yield was chosen over an administered policy rate because it is compatible with every method used in the projects.
+
+## Choice of sample period
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# check whether the series is market-determined or administered, by era
+
+za_raw |>
+  mutate(
+    change = yield - lag(yield),
+    era = cut(year(date),
+              breaks = c(1956, 1975, 1985, 1994, 2000, 2008, 2020, 2027),
+              labels = c("pre-1976", "1976-85", "1986-94 sanctions era", "1995-2000 pre-targeting", "2001-08 inflation targeting", "2009-20 post-GFC", "2021-26 post-COVID"))
+              
+  ) |>
+  filter(!is.na(change)) |>
+  group_by(era) |>
+  summarise(
+    n = n(),
+    pct_no_change = round(100 * mean(change == 0), 1),
+    n_distinct = n_distinct(yield),
+    sd_of_changes = round(sd(change), 3),
+    .groups = "drop"
+  ) |>
+  kable(caption = "Months with zero change by era. A high percentage indicates an administered rate rather than a market-determined yield.")
+```
+
+The era boundaries mark changes in South Africa's political and monetary regime: the start of market pricing of government debt, the 1985 debt standstill, the 1994 democratic transition, inflation targeting from 2000, the global financial crisis and COVID-19. They are a working choice, and other boundaries could be defended. **Sources for the era boundaries**
+
+Before 1976 the standard deviation of monthly changes is much lower than in any later era. **Interpretation of the zero-change percentages and distinct values before 1976, and the justification for starting the sample in January 1976 (administered quotation rather than market trading, the De Kock Commission context, and break tests such as Bai and Perron if used)**
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+#| output: false
+
+# restrict to the market-determined period and build both a tibble and a tsibble
+
+start_date <- as.Date("1976-01-01")
+
+za_tbl <- za_raw |>
+  filter(date >= start_date)
+
+za_ts <- za_tbl |>
+  mutate(month = yearmonth(date)) |>
+  as_tsibble(index = month) |>
+  select(month, yield)
+
+za_tt <- za_tbl |>
+  as_tbl_time(index = date)
+
+has_gaps(za_ts) |> as_tibble() |> kable(caption = "Implicit gaps in the monthly index.")
+# no gaps, if there are gaps the lag() and difference() functions would skip a missing month, this confirms no missing months.
+```
+
+## Summary statistics
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# summary statistics for levels and first differences
+
+bind_rows(
+  za_tbl |> summarise(series = "levels", n = n(), mean = mean(yield),
+                      sd = sd(yield), min = min(yield), max = max(yield)),
+  za_tbl |> mutate(d = yield - lag(yield)) |> filter(!is.na(d)) |>
+    summarise(series = "first differences", n = n(), mean = mean(d),
+              sd = sd(d), min = min(d), max = max(d))
+) |>
+  mutate(across(where(is.numeric), \(x) round(x, 3))) |>
+  kable(caption = "Summary statistics.")
+```
+
+**Interpretation of the summary statistics: the level and spread of the yield, and the mean and spread of monthly changes**
+
+## Time plot
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# time plot of the yield with the era boundaries marked
+
+events <- tribble(
+  ~ date, ~ label, as.Date("1976-01-01"), "market pricing begins", as.Date("1985-09-01"), "debt standstill", as.Date("1994-04-01"), "democratic transition", as.Date("2000-02-01"), "inflation targeting", as.Date("2008-09-01"), "GFC", as.Date("2020-03-01"), "COVID")
+
+za_tbl |>
+  plot_time_series(date, yield, .smooth = FALSE, .interactive = FALSE, .title = "SA 10-year government bond yield", .y_lab = "per cent per annum") +
+  geom_vline(data = events, aes(xintercept = date), linetype = "dotted", colour = "lightblue") +
+  geom_text(data = events, aes(x = date, y = 19.5, label = label), angle = 90, hjust = 1, size = 2.4, colour = "blue")
+```
+
+There is no obvious deterministic trend, and the yield peaks in the late 1990s. **Interpretation of the time plot against the era boundaries: level shifts, persistence, and whether the series appears to return to a fixed mean**
+
+## Monthly changes and volatility
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# first differences and a 24-month rolling standard deviation
+
+roll_sd_24 <- rollify(\(x) sd(x, na.rm = TRUE), window = 24)
+
+za_diff <- za_tt |>
+  mutate(change = yield - lag(yield)) |>
+  filter(!is.na(change)) |>
+  mutate(roll_sd = roll_sd_24(change))
+
+za_diff |>
+  plot_time_series(date, change, .smooth = FALSE, .interactive = FALSE, .title = "First differences of the yield", .y_lab = "percentage points")
+
+za_diff |>
+  filter(!is.na(roll_sd)) |>
+  plot_time_series(date, roll_sd, .smooth = FALSE, .interactive = FALSE, .title = "24-month rolling standard deviation of changes", .y_lab = "percentage points")
+```
+
+The first differences fluctuate around zero with no visible trend, but their spread changes over time. The 24-month rolling standard deviation is consistent with non-constant variance, which motivates the volatility models in [Project 2](#sec-project-2). Time-varying conditional variance is compatible with weak stationarity of the changes, provided the unconditional variance is finite, so these plots do not by themselves show that the changes are non-stationary. **Which periods have high and low volatility, linked to the era boundaries**
+
+## Autocorrelation
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# ACF and PACF of the levels
+
+za_ts |>
+  gg_tsdisplay(yield, plot_type = "partial", lag_max = 36) +
+  labs(title = "Levels: series, ACF and PACF")
+```
+
+**Interpretation of the ACF and PACF of the levels: rate of decay, the lag 1 partial autocorrelation, and what they suggest about a unit root**
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# ACF and PACF of the first differences
+
+za_ts |>
+  gg_tsdisplay(difference(yield), plot_type = "partial", lag_max = 36) +
+  labs(title = "First differences: series, ACF and PACF")
+```
+
+**Interpretation of the ACF and PACF of the changes, and the candidate ARMA orders they suggest for Projects 1 and 2**
+
+## Stationarity tests
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# ADF and KPSS tests on the levels and the first differences
+
+lv <- za_tbl$yield
+dlv <- diff(lv)
+
+tibble(
+  series = c("levels", "first differences"),
+  adf_stat = c(adf.test(lv)$statistic, adf.test(dlv)$statistic),
+  adf_p = c(adf.test(lv)$p.value, adf.test(dlv)$p.value),
+  kpss_stat = c(kpss.test(lv)$statistic, kpss.test(dlv)$statistic),
+  kpss_p = c(kpss.test(lv)$p.value, kpss.test(dlv)$p.value)
+) |>
+  mutate(across(where(is.numeric), \(x) round(x, 4))) |>
+  kable(caption = "ADF tests the null of a unit root; KPSS tests the null of stationarity. tseries truncates p-values at the ends of its tables.")
+```
+
+**Interpretation of the ADF and KPSS results: state each null hypothesis, the conclusion for the levels and for the changes, and note that p-values at the limits of the tables are bounds rather than exact values**
+
+## Implications for the projects
+
+**Summary of what the exploratory analysis implies for the projects: the order of differencing, the evidence of volatility clustering, and whether seasonality is plausible**
+
+# Projects {#sec-projects}
+
+## Project 1: Forecast comparison for the bond yield {#sec-project-1}
+
+### Summary
+
+- Section and topic: Section 1, benchmark forecasts, ARIMA models and time series cross-validation
+- Type: implementation on real-world data
+- Question: does a fitted ARIMA model forecast the yield more accurately than simple benchmarks, and at which horizons?
+- Data: monthly SA 10-year bond yield from January 1976 (see [Data](#sec-data))
+- Methods: naive, drift and seasonal naive benchmarks, non-seasonal ARIMA, expanding-window rolling-origin evaluation at horizons of 1 to 12 months, residual diagnostics
+- Key findings: **key findings**
+- What I would do differently: **what you would do differently next time**
+
+### Analysis
+
+The comparison is between the naive (random walk) forecast, the drift method, a non-seasonal ARIMA model and, as a deliberate check for seasonality, the seasonal naive method. All are evaluated by rolling-origin cross-validation on the yield in levels. **Justification of the design: an expanding rather than a sliding window, the 240-month initial window, and the choice of benchmarks (the mean forecast is omitted)**
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# fable supplies the model functions for the tsibble workflow already in use
+
+library(fable)
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# cross-validation settings: initial training window, step between origins, longest horizon
+
+init <- 240
+step <- 1
+h_max <- 12
+```
+
+The ARIMA order is selected once, on the initial training window only, so that the later evaluation data play no part in choosing it.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# automatic non-seasonal ARIMA selection on the initial window
+
+za_ts |>
+  slice(1:init) |>
+  model(auto = fable::ARIMA(yield ~ PDQ(0, 0, 0))) |>
+  fabletools::report()
+```
+
+The cross-validation uses ARIMA(0,1,1) without a constant. The order is fixed across origins, while the coefficients are re-estimated at every origin. **Confirm that this order matches the selection above, and justify omitting the constant (drift)**
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# expanding window training sets and the four models fitted at each origin
+
+# the last h_max months are dropped so every origin has all horizons observed
+za_cv <- za_ts |>
+  slice(1:(n() - h_max)) |>
+  stretch_tsibble(.init = init, .step = step)
+
+cv_fits <- za_cv |>
+  model(
+    naive = NAIVE(yield),
+    drift = RW(yield ~ drift()),
+    snaive = SNAIVE(yield ~ lag(12)),
+    arima = fable::ARIMA(yield ~ 0 + pdq(0, 1, 1) + PDQ(0, 0, 0))
+  )
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# forecasts from every origin, labelled by horizon, and accuracy by horizon
+
+cv_fc <- cv_fits |>
+  forecast(h = h_max) |>
+  group_by(.id, .model) |>
+  mutate(h = row_number()) |>
+  ungroup() |>
+  as_fable(response = "yield", distribution = yield)
+
+cv_acc <- cv_fc |>
+  accuracy(za_ts, by = c("h", ".model"))
+
+tibble(origins = n_distinct(za_cv$.id)) |>
+  kable(caption = "Number of forecast origins.")
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# cross-validated RMSE at selected horizons
+
+cv_acc |>
+  filter(h %in% c(1, 3, 6, 12)) |>
+  select(h, .model, RMSE) |>
+  pivot_wider(names_from = .model, values_from = RMSE) |>
+  mutate(across(-h, \(x) round(x, 4))) |>
+  kable(caption = "Cross-validated RMSE by horizon (percentage points).")
+```
+
+**Interpretation of the RMSE table: which method is most accurate at each horizon, and by how much**
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# RMSE against horizon for each method
+
+cv_acc |>
+  ggplot(aes(h, RMSE, linetype = .model)) +
+  geom_line() +
+  scale_x_continuous(breaks = 1:h_max) +
+  labs(title = "Cross-validated RMSE by horizon", x = "Months ahead", y = "RMSE (percentage points)", linetype = NULL)
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# RMSE of each method relative to naive: below one means it beats the random walk
+
+cv_acc |>
+  select(h, .model, RMSE) |>
+  group_by(h) |>
+  mutate(rel_rmse = RMSE / RMSE[.model == "naive"]) |>
+  ungroup() |>
+  filter(.model != "naive") |>
+  ggplot(aes(h, rel_rmse, linetype = .model)) +
+  geom_line() +
+  geom_hline(yintercept = 1, colour = "grey50") +
+  scale_x_continuous(breaks = 1:h_max) +
+  labs(title = "RMSE relative to the naive forecast", x = "Months ahead", y = "Relative RMSE", linetype = NULL)
+```
+
+**Interpretation: whether any method beats the naive forecast, and what this says about the predictability of the yield**
+
+The ARIMA model is then fitted to the full sample for diagnostics and a forecast.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# full sample fit and coefficient table
+
+fit_full <- za_ts |>
+  model(arima = fable::ARIMA(yield ~ 0 + pdq(0, 1, 1) + PDQ(0, 0, 0)))
+
+tidy(fit_full) |>
+  select(term, estimate, std.error, p.value) |>
+  mutate(across(where(is.numeric), \(x) signif(x, 4))) |>
+  kable(caption = "Full sample ARIMA estimates.")
+```
+
+**Interpretation of the estimated MA coefficient and its standard error**
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# residual diagnostics: plots and a Ljung-Box test
+
+fit_full |>
+  gg_tsresiduals(lag_max = 36)
+
+# dof is the number of estimated ARMA coefficients
+augment(fit_full) |>
+  features(.innov, ljung_box, lag = 12, dof = 1) |>
+  kable(caption = "Ljung-Box test on the ARIMA residuals.")
+```
+
+**Interpretation of the residual plots and the Ljung-Box test**
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# 12 month forecast with prediction intervals, shown against recent history
+
+fit_full |>
+  forecast(h = h_max) |>
+  autoplot(filter_index(za_ts, "2015 Jan" ~ .)) +
+  labs(title = "ARIMA forecast of the yield", x = NULL, y = "per cent per annum")
+```
+
+These prediction intervals assume a constant innovation variance, which the exploratory analysis suggests does not hold. [Project 2](#sec-project-2) models the variance directly.
+
+### Discussion
+
+**Discussion: conclusions, limitations (forecast errors from neighbouring origins are correlated, a single order fixed across origins, constant variance), and extensions**
+
+## Project 2: Volatility of bond yield changes {#sec-project-2}
+
+### Summary
+
+- Section and topic: Section 1, conditional variance models (ARCH and GARCH)
+- Type: implementation on real-world data
+- Question: is the variance of monthly yield changes time-varying, and which GARCH specification describes it best?
+- Data: monthly changes in the SA 10-year bond yield from February 1976
+- Methods: ARMA mean model chosen by information criteria, Ljung-Box and Engle LM tests for ARCH effects, GARCH(1,1) and GJR-GARCH(1,1) with normal and Student t innovations fitted jointly with the mean, robust standard errors, standardised residual diagnostics, news impact curves, volatility forecasts
+- Key findings: **key findings**
+- What I would do differently: **what you would do differently next time**
+
+### Analysis
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# packages for the variance models (both used in the notes and the ARCH/GARCH guide)
+
+library(rugarch)
+library(FinTS)
+```
+
+The series modelled is the monthly change in the yield, in percentage points, from 1976 onwards. **Justification for modelling changes in percentage points rather than log changes**
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# change series and a small ARMA grid for the conditional mean
+
+dy <- diff(za_tbl$yield)
+
+expand_grid(p = 0:2, q = 0:2) |>
+  mutate(
+    fit = map2(p, q, \(p, q) arima(dy, order = c(p, 0, q))),
+    aic = map_dbl(fit, AIC),
+    bic = map_dbl(fit, BIC)
+  ) |>
+  select(-fit) |>
+  arrange(bic) |>
+  mutate(across(c(aic, bic), \(x) round(x, 2))) |>
+  kable(caption = "Candidate ARMA(p, q) mean models for the yield changes.")
+```
+
+The mean model is MA(1), chosen from the ACF of the changes in the exploratory analysis. **Confirm that the BIC ranking above supports MA(1), or explain the choice if it does not**
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# fit the chosen mean model and keep its residuals
+
+mean_order <- c(0, 1)
+
+mean_fit <- arima(dy, order = c(mean_order[1], 0, mean_order[2]))
+e_hat <- as.numeric(residuals(mean_fit))
+
+# the first month is lost to differencing
+za_res <- tibble(month = za_ts$month[-1], e = e_hat) |>
+  as_tsibble(index = month)
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# correlograms of the mean residuals and of their squares
+
+za_res |>
+  feasts::ACF(e, lag_max = 24) |>
+  autoplot() +
+  labs(title = "ACF of mean model residuals")
+
+za_res |>
+  feasts::ACF(e^2, lag_max = 24) |>
+  autoplot() +
+  labs(title = "ACF of squared mean model residuals")
+```
+
+**Interpretation of the correlograms of the residuals and the squared residuals**
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# tests for remaining linear structure and for ARCH effects, at 12 lags
+
+lb_e <- Box.test(e_hat, lag = 12, type = "Ljung-Box", fitdf = sum(mean_order))
+lb_e2 <- Box.test(e_hat^2, lag = 12, type = "Ljung-Box")
+lm_e <- ArchTest(e_hat, lags = 12)
+
+tibble(
+  test = c("Ljung-Box, residuals", "Ljung-Box, squared residuals", "Engle ARCH LM"),
+  statistic = c(lb_e$statistic, lb_e2$statistic, lm_e$statistic),
+  df = c(lb_e$parameter, lb_e2$parameter, lm_e$parameter),
+  p_value = c(lb_e$p.value, lb_e2$p.value, lm_e$p.value)
+) |>
+  mutate(statistic = round(statistic, 3), p_value = signif(p_value, 3)) |>
+  kable(caption = "Tests on the residuals of the mean model.")
+```
+
+**Interpretation of the three tests: is the mean model adequate, and is there evidence of ARCH effects?**
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# normal quantile plot of the mean residuals
+
+tibble(e = e_hat) |>
+  ggplot(aes(sample = e)) +
+  stat_qq(size = 0.8) +
+  stat_qq_line() +
+  labs(title = "Normal quantile plot of mean model residuals", x = "Theoretical quantile", y = "Sample quantile")
+```
+
+**Interpretation of the tails relative to the normal, and why this motivates Student t innovations**
+
+Four variance models are fitted, each jointly with the ARMA mean: GARCH(1,1) and GJR-GARCH(1,1), each with normal and Student t innovations.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# specify and fit the four models
+
+make_spec <- \(model, dist) ugarchspec(
+  variance.model = list(model = model, garchOrder = c(1, 1)),
+  mean.model = list(armaOrder = mean_order, include.mean = TRUE),
+  distribution.model = dist
+)
+
+models <- tribble(
+  ~ name, ~ model, ~ dist,
+  "GARCH normal", "sGARCH", "norm",
+  "GARCH t", "sGARCH", "std",
+  "GJR normal", "gjrGARCH", "norm",
+  "GJR t", "gjrGARCH", "std"
+)
+
+garch_fits <- map2(models$model, models$dist, \(m, d) ugarchfit(make_spec(m, d), data = dy, solver = "hybrid")) |>
+  set_names(models$name)
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# coefficient estimates with robust standard errors
+
+# rugarch names: omega is alpha_0, gamma1 is the asymmetry term, shape is the t degrees of freedom
+imap_dfr(garch_fits, \(f, nm) {
+  m <- f@fit$robust.matcoef
+  tibble(model = nm, term = rownames(m), estimate = m[, 1], robust_se = m[, 2], p_value = m[, 4])
+}) |>
+  mutate(across(c(estimate, robust_se), \(x) round(x, 4)), p_value = signif(p_value, 3)) |>
+  kable(caption = "Estimates with robust standard errors.")
+```
+
+**Interpretation of the estimates: alpha1 (reaction), beta1 (memory), the asymmetry term gamma1 and the t degrees of freedom**
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# model comparison: likelihood, information criteria and persistence
+
+# rugarch reports information criteria per observation
+imap_dfr(garch_fits, \(f, nm) tibble(
+  model = nm,
+  loglik = likelihood(f),
+  aic = infocriteria(f)[1],
+  bic = infocriteria(f)[2],
+  persistence = as.numeric(persistence(f)),
+  half_life = as.numeric(halflife(f)),
+  long_run_sd = sqrt(as.numeric(uncvariance(f)))
+)) |>
+  mutate(across(where(is.numeric), \(x) round(x, 4))) |>
+  kable(caption = "Model comparison.")
+```
+
+**Interpretation: which model the likelihood, AIC and BIC prefer; what the persistence and half-life mean in months; and, if persistence is close to one, whether a structural break could explain it (for example by refitting on subsamples)**
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# diagnostics on the standardised residuals of each model (p-values, 12 lags)
+
+imap_dfr(garch_fits, \(f, nm) {
+  z <- as.numeric(residuals(f, standardize = TRUE))
+  tibble(
+    model = nm,
+    lb_z = Box.test(z, lag = 12, type = "Ljung-Box", fitdf = sum(mean_order))$p.value,
+    lb_z_sq = Box.test(z^2, lag = 12, type = "Ljung-Box")$p.value,
+    arch_lm = as.numeric(ArchTest(z, lags = 12)$p.value)
+  )
+}) |>
+  mutate(across(where(is.numeric), \(x) signif(x, 3))) |>
+  kable(caption = "Diagnostic p-values: Ljung-Box on z, Ljung-Box on z squared, ARCH LM on z.")
+```
+
+**Interpretation of the diagnostics for each model**
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# quantile plots of standardised residuals against each model's own innovation distribution
+
+imap_dfr(garch_fits, \(f, nm) {
+  z <- sort(as.numeric(residuals(f, standardize = TRUE)))
+  p <- ppoints(length(z))
+  # qdist gives the unit variance t that rugarch garch_fits
+  theo <- if ("shape" %in% names(coef(f))) qdist("std", p, shape = coef(f)["shape"]) else qnorm(p)
+  tibble(model = nm, theoretical = theo, sample = z)
+}) |>
+  ggplot(aes(theoretical, sample)) +
+  geom_point(size = 0.6) +
+  geom_abline(slope = 1, intercept = 0) +
+  facet_wrap(~ model) +
+  labs(title = "Quantile plots of standardised residuals", x = "Theoretical quantile", y = "Sample quantile")
+```
+
+**Which innovation distribution fits the tails better**
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# news impact curves for the symmetric and asymmetric models
+
+map_dfr(c("GARCH t", "GJR t"), \(nm) {
+  ni <- newsimpact(z = NULL, garch_fits[[nm]])
+  tibble(model = nm, shock = ni$zx, variance = ni$zy)
+}) |>
+  ggplot(aes(shock, variance, linetype = model)) +
+  geom_line() +
+  labs(title = "News impact curves", x = "Shock at t - 1", y = "Conditional variance at t")
+```
+
+**Interpretation: is there evidence of asymmetry, and in which direction for a bond yield?**
+
+The remaining chunks use the GARCH(1,1) model with Student t innovations. **Justify this choice from the comparison and diagnostic tables above**
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# changes against the fitted conditional mean plus and minus two conditional standard deviations
+
+chosen <- "GARCH t"
+
+tibble(
+  date = za_tbl$date[-1],
+  change = dy,
+  mu = as.numeric(fitted(garch_fits[[chosen]])),
+  s = as.numeric(sigma(garch_fits[[chosen]]))
+) |>
+  ggplot(aes(date)) +
+  geom_line(aes(y = change), colour = "grey60", linewidth = 0.3) +
+  geom_line(aes(y = mu + 2 * s), colour = "blue", linewidth = 0.4) +
+  geom_line(aes(y = mu - 2 * s), colour = "blue", linewidth = 0.4) +
+  labs(title = paste("Yield changes with two conditional SD band:", chosen), x = NULL, y = "percentage points")
+```
+
+**Interpretation of the conditional standard deviation band over time**
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# 24 month conditional standard deviation forecast, with the long run level marked
+
+garch_fc <- ugarchforecast(garch_fits[[chosen]], n.ahead = 24)
+
+tibble(h = 1:24, sd = as.numeric(sigma(garch_fc))) |>
+  ggplot(aes(h, sd)) +
+  geom_line() +
+  geom_hline(yintercept = sqrt(as.numeric(uncvariance(garch_fits[[chosen]]))), linetype = "dashed") +
+  labs(title = paste("Forecast conditional SD:", chosen), x = "Months ahead", y = "percentage points")
+```
+
+**Interpretation of the volatility forecast: the starting level relative to the long-run level, and the speed of reversion**
+
+### Discussion
+
+**Discussion: conclusions, limitations (monthly frequency, possible breaks in volatility, a single chosen model), and how this links to the regime-switching view in [Project 4](#sec-project-4)**
+
+## Project 3: Harmonic regression with ARMA errors {#sec-project-3}
+
+### Summary
+
+- Section and topic: **confirm section**, spectral analysis and harmonic (Fourier) regression with ARMA errors
+- Type: exploration on real-world data
+- Question: does the yield contain an annual cycle that harmonic terms can exploit, and does a harmonic regression with ARMA errors forecast better than a SARIMA model?
+- Data: monthly yield levels from January 1976, with the last 24 months held out
+- Methods: periodogram, harmonic regression with K = 0 to 6 Fourier pairs and ARMA errors chosen by AICc, SARIMA baseline, test-set accuracy and prediction interval coverage
+- Key findings: **key findings**
+- What I would do differently: **what you would do differently next time**
+
+### Analysis
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# forecast is used for Arima/auto.arima with xreg, fourier() and accuracy()
+# it is loaded after fabletools, so its functions are called with forecast:: to avoid masking confusion
+
+library(forecast)
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# monthly ts object and a train/test split, holding out the last 24 months
+
+y_ts <- ts(za_tbl$yield, start = c(1976, 1), frequency = 12)
+h_test <- 24
+n_train <- length(y_ts) - h_test
+y_train <- window(y_ts, end = time(y_ts)[n_train])
+y_test <- window(y_ts, start = time(y_ts)[n_train + 1])
+
+tibble(set = c("train", "test"),
+  n = c(length(y_train), length(y_test)),
+  start = c(paste(start(y_train), collapse = "-"), paste(start(y_test), collapse = "-")),
+  end = c(paste(end(y_train), collapse = "-"), paste(end(y_test), collapse = "-"))
+) |> kable(caption = "Training and test sets.")
+```
+
+The last 24 months are held out so that the harmonic regression and the SARIMA can be compared on the same out-of-sample period.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# raw periodogram of the linearly detrended training series
+# frequency is in cycles per year because the ts has frequency 12
+
+pg <- spec.pgram(y_train, detrend = TRUE, taper = 0.1, plot = FALSE)
+
+pg_tbl <- tibble(freq = pg$freq, spec = pg$spec) |>
+  mutate(period_months = 12 / freq, share = spec / sum(spec))
+
+# dotted lines mark the seasonal frequencies 1, 2, ..., 6 cycles per year
+
+ggplot(pg_tbl, aes(freq, spec)) +
+  geom_line() +
+  geom_vline(xintercept = 1:6, linetype = "dotted", colour = "blue") +
+  scale_y_log10() +
+  labs(title = "Periodogram of the detrended yield", x = "frequency (cycles per year)", y = "spectrum (log scale)")
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# largest periodogram ordinates
+
+pg_tbl |>
+  slice_max(spec, n = 6) |>
+  mutate(across(where(is.numeric), \(x) round(x, 4))) |>
+  kable(caption = "Six largest periodogram ordinates.")
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# periodogram ordinates at the seasonal frequencies, which are the ones fourier() can represent
+
+idx_seasonal <- sapply(1:6, \(j) which.min(abs(pg$freq - j)))
+
+pg_tbl |>
+  slice(idx_seasonal) |>
+  mutate(harmonic = 1:6, .before = 1) |>
+  mutate(across(where(is.numeric), \(x) signif(x, 4))) |>
+  kable(caption = "Periodogram ordinates at the seasonal frequencies.")
+```
+
+The two tables show where the power sits and how much of it falls at the seasonal frequencies j/12 that the Fourier terms use. **Interpretation of the periodogram: where the power is concentrated, converted to periods in months, and whether there is a peak at 12 months. A linearly detrended series with a unit root still has most of its power at low frequencies, so consider the periodogram of the changes, a smoothed periodogram, or Fisher's test**
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# fit a harmonic regression with K Fourier pairs and stationary ARMA errors
+# d = 0 keeps the errors ARMA, so AICc is comparable across K
+# K = 0 is the same model with no harmonics, included as a reference
+
+fit_k <- function(K) {
+  xr <- if (K == 0) NULL else forecast::fourier(y_train, K = K)
+  forecast::auto.arima(y_train, xreg = xr, d = 0, seasonal = FALSE, stepwise = FALSE, approximation = FALSE)
+}
+
+# full search over ARMA orders for each K, this can take a minute or two
+
+hr_fits <- map(0:6, fit_k)
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# AICc and the selected ARMA error orders for each K
+
+aicc_tbl <- tibble(
+  K = 0:6,
+  error_model = map_chr(hr_fits, \(f) paste0("ARMA(", f$arma[1], ",", f$arma[2], ")")),
+  n_coef = map_int(hr_fits, \(f) length(coef(f))),
+  sigma2 = map_dbl(hr_fits, \(f) f$sigma2),
+  aicc = map_dbl(hr_fits, \(f) f$aicc)
+)
+
+aicc_tbl |>
+  mutate(across(c(sigma2, aicc), \(x) round(x, 3))) |>
+  kable(caption = "AICc by number of harmonics K.")
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# keep the best model with at least one harmonic
+
+K_best <- aicc_tbl |>
+  filter(K >= 1) |>
+  slice_min(aicc, n = 1) |>
+  pull(K)
+
+fit_hr <- hr_fits[[K_best + 1]]
+
+tibble(term = names(coef(fit_hr)),
+  estimate = coef(fit_hr),
+  se = sqrt(diag(fit_hr$var.coef))
+) |>
+  mutate(z = estimate / se) |>
+  mutate(across(where(is.numeric), \(x) round(x, 4))) |>
+  kable(caption = paste0("Harmonic regression with ARMA errors, K = ", K_best, "."))
+```
+
+The number of harmonics is chosen by AICc among K = 1 to 6, with K = 0 shown in the table for reference. **Interpretation of the AICc table and the coefficients. If K = 0 has the lowest AICc, the data do not support harmonic terms and the chosen K is forced rather than selected. Also justify d = 0 given the unit root evidence in the exploratory analysis**
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# residual plots and Ljung-Box test for the harmonic regression
+
+forecast::checkresiduals(fit_hr)
+```
+
+**Interpretation of the residual diagnostics**
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# SARIMA baseline: automatic selection on the same training set
+
+fit_sarima <- forecast::auto.arima(y_train, seasonal = TRUE, approximation = FALSE)
+
+tibble(model = as.character(fit_sarima), aicc = round(fit_sarima$aicc, 3)) |>
+  kable(caption = "SARIMA baseline. Its AICc is not comparable with the harmonic regression if the series is differenced.")
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# forecast the 24 held-out months from both models
+
+fc_hr <- forecast::forecast(fit_hr, xreg = forecast::fourier(y_train, K = K_best, h = h_test))
+fc_sarima <- forecast::forecast(fit_sarima, h = h_test)
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# training and test accuracy for both models
+
+acc_row <- function(fc, name) {
+  as_tibble(forecast::accuracy(fc, y_test), rownames = "set") |>
+    mutate(model = name, .before = 1) |>
+    select(model, set, RMSE, MAE, MAPE, MASE)
+}
+
+bind_rows(
+  acc_row(fc_hr, "harmonic regression + ARMA errors"),
+  acc_row(fc_sarima, "SARIMA")
+) |>
+  mutate(across(where(is.numeric), \(x) round(x, 3))) |>
+  kable(caption = "Forecast accuracy on the training set and the 24-month test set.")
+```
+
+**Interpretation of test-set accuracy for both models**
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# point forecasts from both models against the held-out observations
+
+autoplot(window(y_ts, start = c(2015, 1))) +
+  autolayer(fc_hr, PI = FALSE, series = "harmonic regression") +
+  autolayer(fc_sarima, PI = FALSE, series = "SARIMA") +
+  labs(title = "24-month forecasts against observed yield", x = "year", y = "per cent per annum", colour = "model")
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# 95% prediction intervals from both models, compared by width and test-set coverage
+
+pi_row <- function(fc, name) {
+  tibble(model = name,
+    mean_width_95 = mean(fc$upper[, "95%"] - fc$lower[, "95%"]),
+    coverage_95 = mean(y_test >= fc$lower[, "95%"] & y_test <= fc$upper[, "95%"])
+  )
+}
+
+bind_rows(
+  pi_row(fc_hr, "harmonic regression + ARMA errors"),
+  pi_row(fc_sarima, "SARIMA")
+) |>
+  mutate(across(where(is.numeric), \(x) round(x, 3))) |>
+  kable(caption = "Width and empirical coverage of the 95% prediction intervals on the test set.")
+```
+
+**Interpretation of interval width and coverage, noting that 24 test months give only a rough estimate of coverage**
+
+### Discussion
+
+**Discussion: conclusions, limitations (a single 24-month test window, AICc not comparable across differencing orders), and extensions**
+
+## Project 4: Hidden Markov model for regimes in yield changes {#sec-project-4}
+
+### Summary
+
+- Section and topic: Section 2, hidden Markov models
+- Type: implementation from first principles on real-world data
+- Question: can monthly yield changes be described by a small number of regimes with different means and volatilities, and does a regime model forecast better than an iid normal model?
+- Data: monthly changes in the yield from February 1976, with the last 24 months held out
+- Methods: Gaussian HMM likelihood by the scaled forward algorithm, numerical maximisation from several starting values, number of states chosen by AIC and BIC, Viterbi and forward-backward decoding, mixture forecast distributions, one-step-ahead evaluation by coverage and log score, simulated level forecasts, check against depmixS4
+- Key findings: **key findings**
+- What I would do differently: **what you would do differently next time**
+
+### Analysis
+
+#### Yield changes
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+dy_ts <- diff(y_ts)
+
+plot(dy_ts, las = 1, xlab = "Year", ylab = "Change in yield (percentage points)")
+abline(h = 0, col = "grey")
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+hist(dy_ts, breaks = 60, freq = FALSE, las = 1, main = "",
+     xlab = "Change in yield (percentage points)")
+curve(dnorm(x, mean(dy_ts), sd(dy_ts)), add = TRUE, lwd = 2, col = "red")
+```
+
+**Interpretation: tails and volatility clustering relative to the fitted normal density, and why this motivates a mixture of regimes**
+
+#### Training and test split
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+n_test <- 24
+y_all <- as.numeric(dy_ts)
+n <- length(y_all)
+nx_train <- n - n_test
+x_train <- y_all[1:nx_train]
+x_test <- y_all[(nx_train + 1):n]
+t_all <- as.numeric(time(dy_ts))
+```
+
+#### Parameter transformations
+
+Means are unconstrained, standard deviations are estimated on the log scale, and the off-diagonal entries of $\Gamma$ use a multinomial logit with the diagonal as reference. $\delta$ is the stationary distribution of $\Gamma$.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+n2w <- function(mu, sigma, gamma) {
+  m <- length(mu)
+  tgamma <- NULL
+  if (m > 1) {
+    # divides row i by gamma_ii
+    tgamma <- log(gamma / diag(gamma))
+    tgamma <- tgamma[!diag(m)]
+  }
+  c(mu, log(sigma), tgamma)
+}
+
+w2n <- function(par, m) {
+  mu <- par[1:m]
+  sigma <- exp(par[(m + 1):(2 * m)])
+  gamma <- diag(m)
+  if (m > 1) {
+    gamma[!gamma] <- exp(par[(2 * m + 1):(m * (m + 1))])
+    gamma <- gamma / rowSums(gamma)
+  }
+  delta <- if (m > 1) solve(t(diag(m) - gamma + 1), rep(1, m)) else 1
+  list(mu = mu, sigma = sigma, gamma = gamma, delta = delta)
+}
+```
+
+#### Negative log-likelihood (scaled forward algorithm)
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+hmm_nll <- function(par, x, m) {
+  p <- w2n(par, m)
+  phi <- p$delta
+  ll <- 0
+  for (t in seq_along(x)) {
+    v <- phi %*% p$gamma * dnorm(x[t], p$mu, p$sigma)
+    u <- sum(v)
+    ll <- ll + log(u)
+    phi <- v / u
+  }
+  -ll
+}
+```
+
+#### Fitting with several starting values
+
+States are relabelled in order of increasing standard deviation, so state 1 is always the calmest.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+fit_hmm <- function(x, m, n_starts = 20) {
+  best <- NULL
+  for (s in 1:n_starts) {
+    mu0 <- rnorm(m, mean(x), sd(x) / 10)
+    sigma0 <- sd(x) * exp(runif(m, -1.5, 1))
+    g0 <- matrix(1)
+    if (m > 1) {
+      d <- runif(m, 0.7, 0.98)
+      g0 <- (1 - d) / (m - 1) * matrix(1, m, m)
+      diag(g0) <- d
+    }
+    out <- tryCatch(nlm(hmm_nll, n2w(mu0, sigma0, g0), x = x, m = m,
+                        iterlim = 1000),
+                    error = function(e) NULL)
+    if (!is.null(out) && (is.null(best) || out$minimum < best$minimum)) {
+      best <- out
+    }
+  }
+  p <- w2n(best$estimate, m)
+  ord <- order(p$sigma)
+  list(mu = p$mu[ord], sigma = p$sigma[ord], gamma = p$gamma[ord, ord, drop = FALSE],
+       delta = p$delta[ord], nll = best$minimum, k = m * (m + 1), code = best$code)
+}
+```
+
+#### Number of states
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+set.seed(2026)
+hmm_fits <- lapply(1:3, function(m) fit_hmm(x_train, m))
+
+sel <- data.frame(m = 1:3,
+                  k = sapply(hmm_fits, `[[`, "k"),
+                  logLik = -sapply(hmm_fits, `[[`, "nll"),
+                  code = sapply(hmm_fits, `[[`, "code"))
+sel$AIC <- -2 * sel$logLik + 2 * sel$k
+sel$BIC <- -2 * sel$logLik + log(nx_train) * sel$k
+
+sel |>
+  mutate(across(c(logLik, AIC, BIC), \(x) round(x, 2))) |>
+  kable(caption = "Number of states: log-likelihood, AIC and BIC. code is the nlm convergence code (1 or 2 indicates probable convergence).")
+```
+
+**Interpretation: the number of states chosen by BIC, and whether AIC agrees**
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# keep the number of states with the lowest BIC
+m_hat <- sel$m[which.min(sel$BIC)]
+hmm_fit <- hmm_fits[[m_hat]]
+
+tibble(state = 1:m_hat, mean = hmm_fit$mu, sd = hmm_fit$sigma, stationary_prob = hmm_fit$delta) |>
+  mutate(across(-state, \(x) round(x, 4))) |>
+  kable(caption = "State-dependent means and standard deviations (percentage points), and the stationary distribution.")
+
+gamma_tbl <- round(hmm_fit$gamma, 4)
+dimnames(gamma_tbl) <- list(paste("from state", 1:m_hat), paste("to state", 1:m_hat))
+kable(gamma_tbl, caption = "Estimated transition probability matrix.")
+```
+
+**Interpretation of the state means, standard deviations, transition probabilities (expected duration 1 / (1 - gamma_ii) months) and stationary distribution**
+
+#### Global decoding (Viterbi)
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+viterbi_norm <- function(x, fit) {
+  m <- length(fit$mu)
+  n <- length(x)
+  lg <- log(fit$gamma)
+  lp <- outer(x, 1:m, function(x, i) dnorm(x, fit$mu[i], fit$sigma[i], log = TRUE))
+  xi <- matrix(0, n, m)
+  xi[1, ] <- log(fit$delta) + lp[1, ]
+  for (t in 2:n) {
+    for (j in 1:m) {
+      xi[t, j] <- max(xi[t - 1, ] + lg[, j]) + lp[t, j]
+    }
+  }
+  s <- numeric(n)
+  s[n] <- which.max(xi[n, ])
+  for (t in (n - 1):1) {
+    s[t] <- which.max(xi[t, ] + lg[, s[t + 1]])
+  }
+  s
+}
+
+vit <- viterbi_norm(x_train, hmm_fit)
+```
+
+#### Local decoding (scaled forward-backward)
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+log_fb <- function(x, fit) {
+  m <- length(fit$mu)
+  n <- length(x)
+  P <- outer(x, 1:m, function(x, i) dnorm(x, fit$mu[i], fit$sigma[i]))
+  la <- lb <- matrix(0, n, m)
+
+  phi <- fit$delta * P[1, ]
+  lscale <- log(sum(phi))
+  phi <- phi / sum(phi)
+  la[1, ] <- lscale + log(phi)
+  for (t in 2:n) {
+    phi <- phi %*% fit$gamma * P[t, ]
+    lscale <- lscale + log(sum(phi))
+    phi <- phi / sum(phi)
+    la[t, ] <- lscale + log(phi)
+  }
+
+  # beta_T = 1, stored as phi = 1/m with log scale log(m)
+  phi <- rep(1 / m, m)
+  lscale <- log(m)
+  for (t in (n - 1):1) {
+    phi <- fit$gamma %*% (P[t + 1, ] * phi)
+    lb[t, ] <- log(phi) + lscale
+    lscale <- lscale + log(sum(phi))
+    phi <- phi / sum(phi)
+  }
+  list(la = la, lb = lb)
+}
+
+state_probs <- function(x, fit) {
+  fb <- log_fb(x, fit)
+  la_n <- fb$la[length(x), ]
+  llk <- max(la_n) + log(sum(exp(la_n - max(la_n))))
+  exp(fb$la + fb$lb - llk)
+}
+
+smooth_probs <- state_probs(x_train, hmm_fit)
+```
+
+#### Decoded states
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+state_cols <- c("steelblue", "orange", "red")[1:m_hat]
+t_train <- t_all[1:nx_train]
+
+plot(t_train, x_train, type = "l", col = "grey", las = 1,
+     xlab = "Year", ylab = "Change in yield (percentage points)")
+points(t_train, x_train, pch = 19, cex = 0.5, col = state_cols[vit])
+legend("topright", legend = paste("State", 1:m_hat), col = state_cols,
+       pch = 19, bty = "n")
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+matplot(t_train, smooth_probs, type = "l", lty = 1, lwd = 1.5,
+        col = state_cols, las = 1, ylim = c(0, 1),
+        xlab = "Year", ylab = "P(state | all training data)")
+legend("topright", legend = paste("State", 1:m_hat), col = state_cols,
+       lty = 1, bty = "n")
+```
+
+**Interpretation: which historical periods fall in each state, linked to the era boundaries in the exploratory analysis**
+
+#### Forecast distribution
+
+The h-step forecast distribution is a normal mixture with weights $\phi_T \Gamma^h$, where $\phi_T$ are the filtered state probabilities at the end of the training period.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+filter_probs <- function(x, fit) {
+  la <- log_fb(x, fit)$la
+  # subtract each row's maximum before exponentiating
+  f <- exp(la - apply(la, 1, max))
+  f / rowSums(f)
+}
+
+mix_quantile <- function(p, w, mu, sigma) {
+  f <- function(q) sum(w * pnorm(q, mu, sigma)) - p
+  uniroot(f, range(mu) + c(-10, 10) * max(sigma))$root
+}
+
+fc_hmm <- function(fit, phi, h_max, level = 0.95) {
+  a <- (1 - level) / 2
+  w <- phi
+  out <- matrix(NA, h_max, 3, dimnames = list(NULL, c("mean", "lower", "upper")))
+  for (h in 1:h_max) {
+    w <- w %*% fit$gamma
+    out[h, ] <- c(sum(w * fit$mu),
+                  mix_quantile(a, w, fit$mu, fit$sigma),
+                  mix_quantile(1 - a, w, fit$mu, fit$sigma))
+  }
+  out
+}
+
+filt_all <- filter_probs(y_all, hmm_fit)
+hmm_fc <- fc_hmm(hmm_fit, filt_all[nx_train, ], n_test)
+iid_fc <- fc_hmm(hmm_fits[[1]], 1, n_test)
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+t_test <- t_all[(nx_train + 1):n]
+t_recent <- t_all > 2018
+
+plot(t_all[t_recent], y_all[t_recent], type = "l", las = 1,
+     ylim = range(y_all[t_recent], hmm_fc, iid_fc),
+     xlab = "Year", ylab = "Change in yield (percentage points)")
+lines(t_test, hmm_fc[, "mean"], col = "red", lwd = 2)
+lines(t_test, hmm_fc[, "lower"], col = "red", lty = 2)
+lines(t_test, hmm_fc[, "upper"], col = "red", lty = 2)
+lines(t_test, iid_fc[, "lower"], col = "steelblue", lty = 3)
+lines(t_test, iid_fc[, "upper"], col = "steelblue", lty = 3)
+abline(v = t_test[1], col = "grey")
+legend("topleft", legend = c(paste0(m_hat, "-state HMM"), "1-state (iid normal)"),
+       col = c("red", "steelblue"), lty = c(2, 3), bty = "n")
+```
+
+#### One-step-ahead evaluation on the test set
+
+Parameters are held at their training estimates. The filter is updated with each new observation, and each one-step forecast is compared with the next observed change. Coverage is of the 95% interval; the log score is the mean log predictive density.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+one_step_eval <- function(fit, filt) {
+  res <- t(sapply(nx_train:(n - 1), function(t) {
+    w <- filt[t, ] %*% fit$gamma
+    c(fc_hmm(fit, filt[t, ], 1),
+      log(sum(w * dnorm(y_all[t + 1], fit$mu, fit$sigma))))
+  }))
+  c(coverage = mean(x_test >= res[, 2] & x_test <= res[, 3]),
+    mean_width = mean(res[, 3] - res[, 2]),
+    log_score = mean(res[, 4]))
+}
+
+rbind(hmm = one_step_eval(hmm_fit, filt_all),
+      iid_normal = one_step_eval(hmm_fits[[1]], filter_probs(y_all, hmm_fits[[1]]))) |>
+  round(4) |>
+  kable(caption = "One-step-ahead evaluation on the test months: coverage of the 95% interval, mean interval width and mean log score.")
+```
+
+**Interpretation of coverage, interval width and log score for the HMM against the iid normal model**
+
+#### Yield level forecasts by simulation
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+sim_paths <- function(fit, phi, h_max, n_sim, y0) {
+  m <- length(fit$mu)
+  paths <- matrix(NA, n_sim, h_max)
+  for (s in 1:n_sim) {
+    state <- sample(1:m, 1, prob = phi)
+    level <- y0
+    for (h in 1:h_max) {
+      state <- sample(1:m, 1, prob = fit$gamma[state, ])
+      level <- level + rnorm(1, fit$mu[state], fit$sigma[state])
+      paths[s, h] <- level
+    }
+  }
+  paths
+}
+
+set.seed(2026)
+y_levels <- as.numeric(y_ts)
+y0 <- y_levels[nx_train + 1]
+band <- apply(sim_paths(hmm_fit, filt_all[nx_train, ], n_test, 5000, y0), 2,
+              quantile, c(0.025, 0.5, 0.975))
+band1 <- apply(sim_paths(hmm_fits[[1]], 1, n_test, 5000, y0), 2,
+               quantile, c(0.025, 0.5, 0.975))
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+t_levels <- as.numeric(time(y_ts))
+recent <- t_levels > 2018
+
+plot(t_levels[recent], y_levels[recent], type = "l", las = 1,
+     ylim = range(y_levels[recent], band, band1),
+     xlab = "Year", ylab = "Yield (%)")
+polygon(c(t_test, rev(t_test)), c(band[1, ], rev(band[3, ])),
+        col = adjustcolor("red", 0.2), border = NA)
+lines(t_test, band[2, ], col = "red", lwd = 2)
+lines(t_test, band1[1, ], col = "steelblue", lty = 3)
+lines(t_test, band1[3, ], col = "steelblue", lty = 3)
+lines(t_levels[recent], y_levels[recent])
+abline(v = t_test[1], col = "grey")
+legend("topleft", legend = c(paste0(m_hat, "-state HMM (median, 95%)"), "1-state (95%)"),
+       col = c("red", "steelblue"), lty = c(1, 3), bty = "n")
+```
+
+**Interpretation of the simulated yield-level forecast bands**
+
+#### Check against depmixS4
+
+depmixS4 estimates the initial distribution freely rather than setting it to the stationary distribution, so the log-likelihoods should be close but not identical. State labels may differ, so compare the Viterbi paths with a cross-table.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+library(depmixS4)
+
+set.seed(1)
+mod <- depmix(dy_ts ~ 1, data = data.frame(dy_ts = x_train), nstates = m_hat,
+              family = gaussian())
+fm <- fit(mod, verbose = FALSE)
+
+tibble(fit = c("own", "depmixS4"), logLik = c(-hmm_fit$nll, as.numeric(logLik(fm)))) |>
+  kable(caption = "Log-likelihood of the two fits.")
+summary(fm)
+table(own = vit, depmixS4 = fm@posterior$state)
+```
+
+**Comment on the agreement between the two fits**
+
+### Discussion
+
+**Discussion: conclusions, limitations (Gaussian states, no autocorrelation within states, parameters held fixed over the test period), and comparison with the GARCH view of volatility in [Project 2](#sec-project-2)**
+
+## Synthesis across the projects {#sec-synthesis}
+
+**Synthesis: how the projects connect (the constant-variance intervals of Project 1 motivate Project 2; Projects 2 and 4 give two explanations of changing volatility; Project 3 tests for the seasonality checked informally in Project 1), and what the four together say about forecasting the yield**
+
+# Tutorials {#sec-tutorials}
+
+## Section overviews
+
+### Section 1
+
+**Overview of Section 1: key concepts, the most challenging aspects, and your understanding**
+
+### Section 2
+
+**Overview of Section 2: key concepts, the most challenging aspects, and your understanding**
+
+## Tutorial 1: The forecasting process and features of time series {#sec-tut-1}
+
+**Brief statement of each question, so the answers can be read on their own**
+
+### Question 1
+
+Problem definition. Establish what the forecasts are for and who will use them. For a biscuit manufacturer this is likely production scheduling, purchasing of raw materials (flour, sugar, chocolate, packaging), inventory and distribution planning, and budgeting. This determines which products are forecast, the level of aggregation (individual SKU, product family, region or retailer), the forecast horizon (weeks for production runs, months for procurement, a year or more for capacity and budgets), how often forecasts are updated, and how accurate they need to be. It requires discussion with production, sales, marketing and finance staff.
+
+Data collection. Gather historical sales for each product at the frequency and aggregation chosen above, ideally covering several years so that seasonal patterns can be estimated. Decide whether to use orders, shipments or retail sales, since shipments can understate true demand during stock-outs. Collect related information that may explain sales: prices, promotions, advertising, public holidays and festive periods, product launches and discontinuations, and competitor activity. Expert knowledge from the sales team about planned promotions or contracts is also data. Check for errors, gaps and changes in definitions.
+
+Data analysis. Plot each series and look for trend, seasonality (for example peaks before Christmas and Easter), cycles, outliers, and structural breaks such as a product relaunch or a lost retail contract. Examine autocorrelation and relationships between sales and explanatory variables such as price or promotions, and between products (cannibalisation). Decide whether a transformation is needed, for example logs if variability grows with the level of sales. The feedback arrow in Figure 1 reflects that this step is revisited when fitted models reveal something missed.
+
+Model selection and fitting. Using what the analysis showed, choose candidate models: simple benchmarks (naive, seasonal naive), moving averages, exponential smoothing (for example Holt-Winters for trend and seasonality), ARIMA or SARIMA models, or regression models with promotion and price effects. Because there are several products, methods that can be applied systematically across many series are attractive. Estimate the parameters of each candidate on the training data.
+
+Model validation. Assess how well each model forecasts data it was not fitted to, using a hold-out test set or rolling-origin evaluation. Compare accuracy measures such as MAE, RMSE, MAPE or MASE, including against the benchmark methods. Check the residuals: they should look like uncorrelated noise with mean zero (for example using the residual ACF and a Ljung-Box test). Also check whether prediction intervals have roughly the stated coverage. Select the model or models to use.
+
+Forecasting model deployment. Put the chosen model into routine use: refit it on all available data, produce point forecasts and prediction intervals at the required horizon and frequency, and deliver them in a form the planners can use, ideally integrated with the company’s planning systems. Document the method and assumptions, and allow for judgemental adjustment where planners know of future events the model cannot see, such as a planned promotion.
+
+Monitoring forecasting model performance. As actual sales arrive, compare them to the forecasts and track the errors over time to detect bias or declining accuracy. Changes in consumer tastes, pricing, competitors or distribution can make a model inadequate. When performance deteriorates, re-estimate or re-specify the model, which returns the process to earlier stages.
+
+### Question 2
+
+a)  Monthly computer hard drive sales, 10 years, local store. A trend is likely: growth as computer use increased, possibly followed by decline as solid-state drives and cloud storage replaced hard drives. Annual seasonality is likely, with peaks around the start of the academic year and the end-of-year festive and Black Friday period. Some cyclical behaviour linked to economic conditions is also possible.
+
+b)  Hourly pulse rate, one week. No long-term trend. A strong daily (24-hour) pattern is expected: lower during sleep and higher during waking hours. There will be short-lived spikes from exercise or stress and strong autocorrelation between adjacent hours. A weekday versus weekend difference may exist, but one week of data is too short to estimate a weekly pattern.
+
+c)  Daily fast-food sales, six months. A strong weekly seasonal pattern is expected, with higher sales on particular days such as Fridays and weekends. There may be a trend over the period, and effects from public holidays, school holidays, paydays and promotions. Annual seasonality cannot be identified from six months; part of it may appear as a trend.
+
+d)  Weekly electricity consumption, local area, 10 years. Strong annual seasonality driven by heating in winter and cooling in summer (with a period of about 52.18 weeks, which is not an integer). A trend is possible, upward from population and economic growth or downward from efficiency improvements and rooftop solar. Dips over the Christmas and New Year period, and irregular variation from unusual weather, are also expected.
+
+### Question 6
+
+Time plot. The series does not fluctuate around a constant mean. It rises from about 460 to about 600 over the first 110 or so days, drifts down, then falls sharply to about 310 around days 240 to 270 before levelling off near 350 to 400. These long runs and level shifts, with no tendency to return to a fixed level, are typical of a random walk rather than a stationary process.
+
+ACF. The autocorrelations are close to 1 at lag 1 and decay very slowly, roughly linearly, remaining around 0.8 at lag 25 and far outside the significance bounds. For a stationary series the ACF should decay to zero fairly quickly. Slow decay of this kind indicates non-stationarity.
+
+PACF. There is a single large spike at lag 1 with a value close to 1, and the remaining partial autocorrelations are essentially within the bounds. This is consistent with an AR(1) process with coefficient close to 1, that is, a unit root.
+
+Conclusion. Together the plots indicate that the series is non-stationary in the mean and that first differencing, $y'_t = y_t - y_{t-1}$, is appropriate. The differenced series (daily price changes) would be expected to look approximately like white noise. A unit root test such as ADF or KPSS could be used to support this formally.
+
+### Reflection
+
+**Reflection: what you learned, what was difficult, and how it fed into the projects**
+
+## Tutorial 2: Exponential smoothing {#sec-tut-2}
+
+**Brief statement of each question**
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+library(fpp2)
+```
+
+### Question 1
+
+Own implementation of SES. `ses_onestep()` runs the recursion $\hat{y}_{t+1|t} = \alpha y_t + (1 - \alpha)\hat{y}_{t|t-1}$ with $\hat{y}_{1|0} = \ell_0$ and returns all one-step-ahead forecasts, the last of which is the forecast of the next observation.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+ses_onestep <- function(y, alpha, level) {
+  n <- length(y)
+  yhat <- numeric(n + 1)
+  yhat[1] <- level
+  for (t in 1:n) yhat[t + 1] <- alpha * y[t] + (1 - alpha) * yhat[t]
+  yhat
+}
+
+ses_fc <- function(y, alpha, level) {
+  tail(ses_onestep(y, alpha, level), 1)
+}
+
+ses_sse <- function(par, y) {
+  yhat <- ses_onestep(y, par[1], par[2])
+  sum((y - yhat[seq_along(y)])^2)
+}
+```
+
+Estimate $\alpha$ and $\ell_0$ by minimising the SSE, and fit `ses()` for comparison.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+est_m <- optim(c(0.5, marathon[1]), ses_sse, y = marathon)
+fit_m <- ses(marathon, h = 1)
+
+rbind(optim = est_m$par, ses = fit_m$model$par[c("alpha", "l")])
+```
+
+Forecast for 2017 from the own function (with the `optim` estimates and with the `ses()` estimates) against `ses()`.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+alpha_m <- unname(fit_m$model$par["alpha"])
+l0_m <- unname(fit_m$model$par["l"])
+
+c(own_optim = ses_fc(marathon, est_m$par[1], est_m$par[2]),
+  own_ses_par = ses_fc(marathon, alpha_m, l0_m),
+  ses = fit_m$mean[1])
+```
+
+Point forecast and 95% prediction interval for 2017 by hand, using $\hat{\sigma} = \sqrt{SSE / (T - 2)}$ (two estimated parameters).
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+n_m <- length(marathon)
+res_m <- marathon - ses_onestep(marathon, alpha_m, l0_m)[1:n_m]
+sigma_m <- sqrt(sum(res_m^2) / (n_m - 2))
+fc_m <- ses_fc(marathon, alpha_m, l0_m)
+
+pi_m <- rbind(own = c(fc_m, fc_m + c(-1, 1) * qnorm(0.975) * sigma_m),
+              ses = c(fit_m$mean[1], fit_m$lower[1, "95%"], fit_m$upper[1, "95%"]))
+colnames(pi_m) <- c("forecast", "lower", "upper")
+pi_m
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+plot(marathon, las = 1, ylab = "Winning time (minutes)", xlab = "Year")
+lines(fitted(fit_m), col = "red")
+```
+
+Estimate of $\sigma$, by hand and from `ses()`.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+c(own = sigma_m, ses = sqrt(fit_m$model$sigma2))
+```
+
+**Interpretation: do the own estimates and forecasts match ses(), and why might they differ slightly?**
+
+### Question 2
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+fit_o <- ses(oil, h = 4)
+summary(fit_o)
+```
+
+95% interval for the first forecast using $\hat{y} \pm 1.96 s$ with $s$ the standard deviation of the residuals, next to the interval from `ses()`.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+s_o <- sd(residuals(fit_o))
+
+pi_o <- rbind(sd_resid = fit_o$mean[1] + c(-1, 1) * 1.96 * s_o,
+              ses = c(fit_o$lower[1, "95%"], fit_o$upper[1, "95%"]))
+colnames(pi_o) <- c("lower", "upper")
+pi_o
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+c(s = s_o, sigma_ses = sqrt(fit_o$model$sigma2), mean_resid = mean(residuals(fit_o)))
+```
+
+**Interpretation of the two intervals and the residual summaries**
+
+### Question 3
+
+`ses_sse()` from Question 1 already returns the SSE, so it is passed straight to `optim()`.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+oil_sub <- window(oil, start = 1996, end = 2013)
+
+est_o <- optim(c(0.5, oil_sub[1]), ses_sse, y = oil_sub)
+fit_os <- ses(oil_sub)
+
+rbind(optim = c(est_o$par, SSE = est_o$value),
+      ses = c(fit_os$model$par[c("alpha", "l")],
+              SSE = ses_sse(fit_os$model$par[c("alpha", "l")], oil_sub)))
+```
+
+**Interpretation: comparison of the optim and ses() estimates and SSE**
+
+### Question 4
+
+#### a)
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+plot(books, main = "", las = 1, xlab = "Day")
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+ses_pb <- ses(books[, "Paperback"], h = 4)
+ses_hc <- ses(books[, "Hardcover"], h = 4)
+
+par(mfrow = c(1, 2))
+plot(ses_pb, main = "Paperback: SES", las = 1, xlab = "Day")
+plot(ses_hc, main = "Hardcover: SES", las = 1, xlab = "Day")
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+c(paperback = accuracy(ses_pb)[, "RMSE"], hardcover = accuracy(ses_hc)[, "RMSE"])
+```
+
+**Comment on the series and the SES forecasts**
+
+#### b)
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+holt_pb <- holt(books[, "Paperback"], h = 4)
+holt_hc <- holt(books[, "Hardcover"], h = 4)
+
+par(mfrow = c(1, 2))
+plot(holt_pb, main = "Paperback: Holt", las = 1, xlab = "Day")
+plot(holt_hc, main = "Hardcover: Holt", las = 1, xlab = "Day")
+```
+
+Training RMSE and AICc for both methods. AICc penalises Holt's two extra parameters ($\beta$ and $b_0$), RMSE does not.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+fits_b <- list(ses_pb = ses_pb, holt_pb = holt_pb, ses_hc = ses_hc, holt_hc = holt_hc)
+
+t(sapply(fits_b, function(f) c(RMSE = accuracy(f)[, "RMSE"], AICc = f$model$aicc)))
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+holt_pb$model$par
+holt_hc$model$par
+```
+
+**Comparison of SES and Holt by RMSE and AICc**
+
+#### c)
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+sapply(fits_b, function(f) f$mean)
+```
+
+**Comment on the forecasts**
+
+#### d)
+
+95% interval for the first forecast as $\hat{y} \pm 1.96 \times \text{RMSE}$, next to the intervals from `ses()` and `holt()`.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+t(sapply(fits_b, function(f) {
+  rmse <- accuracy(f)[, "RMSE"]
+  c(fc = f$mean[1],
+    rmse_lo = f$mean[1] - 1.96 * rmse, rmse_hi = f$mean[1] + 1.96 * rmse,
+    r_lo = unname(f$lower[1, "95%"]), r_hi = unname(f$upper[1, "95%"]))
+}))
+```
+
+**Comparison of the RMSE-based and model-based intervals**
+
+### Question 5
+
+Simulate from the innovations state-space form of SES: $y_t = \ell_{t-1} + \varepsilon_t$, $\ell_t = \ell_{t-1} + \alpha \varepsilon_t$, $\varepsilon_t \sim N(0, \sigma^2)$, with $\alpha = 0.3$, $\ell_0 = 50$, $\sigma = 2$.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+sim_ses <- function(n, alpha, l0, sigma) {
+  y <- numeric(n)
+  level <- l0
+  for (t in 1:n) {
+    e <- rnorm(1, 0, sigma)
+    y[t] <- level + e
+    level <- level + alpha * e
+  }
+  ts(y)
+}
+
+set.seed(2026)
+y_ses <- sim_ses(n = 200, alpha = 0.3, l0 = 50, sigma = 2)
+plot(y_ses, las = 1, ylab = "y")
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+est_s <- optim(c(0.5, y_ses[1]), ses_sse, y = y_ses)
+fit_s <- ses(y_ses)
+
+rbind(true = c(alpha = 0.3, l = 50, sigma = 2),
+      optim = c(est_s$par, sqrt(est_s$value / (length(y_ses) - 2))),
+      ses = c(fit_s$model$par[c("alpha", "l")], sqrt(fit_s$model$sigma2)))
+```
+
+**Comment on how well the true SES parameters are recovered**
+
+Holt's method in the same form: $y_t = \ell_{t-1} + b_{t-1} + \varepsilon_t$, $\ell_t = \ell_{t-1} + b_{t-1} + \alpha \varepsilon_t$, $b_t = b_{t-1} + \beta \varepsilon_t$, with $\alpha = 0.3$, $\beta = 0.05$, $\ell_0 = 50$, $b_0 = 0.5$, $\sigma = 2$. `holt()` reports $\beta$ in this parametrisation.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+sim_holt <- function(n, alpha, beta, l0, b0, sigma) {
+  y <- numeric(n)
+  level <- l0
+  trend <- b0
+  for (t in 1:n) {
+    e <- rnorm(1, 0, sigma)
+    y[t] <- level + trend + e
+    level <- level + trend + alpha * e
+    trend <- trend + beta * e
+  }
+  ts(y)
+}
+
+set.seed(2026)
+y_holt <- sim_holt(n = 200, alpha = 0.3, beta = 0.05, l0 = 50, b0 = 0.5, sigma = 2)
+plot(y_holt, las = 1, ylab = "y")
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+holt_sse <- function(par, y) {
+  alpha <- par[1]
+  beta <- par[2]
+  level <- par[3]
+  trend <- par[4]
+  sse <- 0
+  for (t in seq_along(y)) {
+    e <- y[t] - (level + trend)
+    sse <- sse + e^2
+    level <- level + trend + alpha * e
+    trend <- trend + beta * e
+  }
+  sse
+}
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+est_h <- optim(c(0.5, 0.1, y_holt[1], 0), holt_sse, y = y_holt)
+fit_h <- holt(y_holt)
+
+rbind(true = c(alpha = 0.3, beta = 0.05, l = 50, b = 0.5, sigma = 2),
+      optim = c(est_h$par, sqrt(est_h$value / (length(y_holt) - 4))),
+      holt = c(fit_h$model$par[c("alpha", "beta", "l", "b")], sqrt(fit_h$model$sigma2)))
+```
+
+**Comment on how well the true Holt parameters are recovered**
+
+### Reflection
+
+**Reflection: what you learned, what was difficult, and how it fed into the projects**
+
+## Tutorial 3: Dynamic linear models {#sec-tut-3}
+
+**Brief statement of each question**
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+library(dlm)
+```
+
+### Random walk plus noise: Nile data
+
+Same build function as in the prac, with $V$ and $W$ estimated on the log scale.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+build_rwpn <- function(p) {
+  dlmModPoly(order = 1, dV = exp(p[1]), dW = exp(p[2]))
+}
+
+mle_nile <- dlmMLE(Nile, parm = c(log(var(Nile)), log(var(Nile))), build = build_rwpn)
+mle_nile$convergence
+exp(mle_nile$par)
+```
+
+**Interpretation of the estimated V and W, and their ratio**
+
+Filtered and smoothed level.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+mod_nile <- build_rwpn(mle_nile$par)
+filt_nile <- dlmFilter(Nile, mod_nile)
+smooth_nile <- dlmSmooth(filt_nile)
+
+plot(Nile, las = 1, ylab = "Annual flow")
+lines(dropFirst(filt_nile$m), col = "blue", lwd = 2)
+lines(dropFirst(smooth_nile$s), col = "orange", lwd = 2)
+legend("topright", legend = c("filtered", "smoothed"), col = c("blue", "orange"), lwd = 2, bty = "n")
+```
+
+**Comment on the filtered against the smoothed level**
+
+Ten-year forecast. The interval uses $Q_t$, the forecast variance of $y_{T+h}$, rather than $R_t$, the forecast variance of the state.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+fc_nile <- dlmForecast(filt_nile, nAhead = 10)
+yrs_fc <- 1971:1980
+se_y <- sqrt(unlist(fc_nile$Q))
+se_state <- sqrt(unlist(fc_nile$R))
+
+plot(Nile, xlim = c(1871, 1980), las = 1, ylab = "Annual flow")
+lines(dropFirst(filt_nile$m), col = "blue", lwd = 2)
+lines(yrs_fc, fc_nile$f, col = "purple", lwd = 2)
+lines(yrs_fc, fc_nile$f - 1.96 * se_y, col = "purple", lty = 2)
+lines(yrs_fc, fc_nile$f + 1.96 * se_y, col = "purple", lty = 2)
+lines(yrs_fc, fc_nile$a - 1.96 * se_state, col = "grey40", lty = 3)
+lines(yrs_fc, fc_nile$a + 1.96 * se_state, col = "grey40", lty = 3)
+```
+
+**Comment on the forecast and the two intervals**
+
+### Missing observations
+
+Set 1921 to 1940 to `NA` and run the filter and smoother with the same parameters.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+nile_na <- Nile
+window(nile_na, start = 1921, end = 1940) <- NA
+
+filt_na <- dlmFilter(nile_na, mod_nile)
+smooth_na <- dlmSmooth(filt_na)
+
+se_filt <- sqrt(unlist(dlmSvd2var(filt_na$U.C, filt_na$D.C)))[-1]
+se_smooth <- sqrt(unlist(dlmSvd2var(smooth_na$U.S, smooth_na$D.S)))[-1]
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+m_filt <- dropFirst(filt_na$m)
+m_smooth <- dropFirst(smooth_na$s)
+
+plot(nile_na, las = 1, ylab = "Annual flow", ylim = c(400, 1400))
+lines(m_filt, col = "blue", lwd = 2)
+lines(m_filt - 1.96 * se_filt, col = "blue", lty = 2)
+lines(m_filt + 1.96 * se_filt, col = "blue", lty = 2)
+lines(m_smooth, col = "orange", lwd = 2)
+lines(m_smooth - 1.96 * se_smooth, col = "orange", lty = 2)
+lines(m_smooth + 1.96 * se_smooth, col = "orange", lty = 2)
+abline(v = c(1920.5, 1940.5), col = "grey")
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+gap <- time(Nile) >= 1919 & time(Nile) <= 1942
+cbind(year = time(Nile)[gap], y = nile_na[gap],
+      filtered = m_filt[gap], se_filt = se_filt[gap],
+      smoothed = m_smooth[gap], se_smooth = se_smooth[gap])
+```
+
+**Interpretation: how the filtered and smoothed standard errors behave across the missing years**
+
+### Basic structural model: co2
+
+The model from the prac is refitted here so that this section runs on its own.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+build_bsm <- function(p) {
+  mod <- dlmModPoly() + dlmModSeas(12)
+  W(mod)[1, 1] <- exp(p[1])
+  W(mod)[2, 2] <- exp(p[2])
+  W(mod)[3, 3] <- exp(p[3])
+  V(mod) <- exp(p[4])
+  mod
+}
+
+mle_bsm <- dlmMLE(co2, parm = c(0, 0, 0, 0), build = build_bsm)
+mod_bsm <- build_bsm(mle_bsm$par)
+filt_bsm <- dlmFilter(co2, mod_bsm)
+exp(mle_bsm$par)
+```
+
+The filtered states are erratic at the start of the series because the prior is diffuse, with $m_0 = 0$ and $C_0 = 10^7 I_{13}$. The table shows the filtered level, slope and first seasonal state, with the standard error of the level, for the first two years. **Comment on how quickly the filter settles**
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+se_bsm <- t(sapply(dlmSvd2var(filt_bsm$U.C, filt_bsm$D.C), function(C) sqrt(diag(C)[1:3])))
+
+round(cbind(y = c(NA, co2[1:24]),
+            level = filt_bsm$m[1:25, 1], se_level = se_bsm[1:25, 1],
+            slope = filt_bsm$m[1:25, 2], season = filt_bsm$m[1:25, 3]), 2)
+```
+
+Fitted values are the one-step-ahead predictions $f_t = F a_t$, added in red.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+level_bsm <- dropFirst(filt_bsm$m[, 1])
+season_bsm <- dropFirst(filt_bsm$m[, 3])
+
+plot(co2, ylim = c(300, 380), las = 1, lwd = 2)
+lines(level_bsm, col = "blue", lwd = 2)
+lines(level_bsm + season_bsm, col = "orange", lwd = 2)
+lines(ts(filt_bsm$f, start = start(co2), frequency = 12), col = "red")
+legend("topleft", legend = c("observed", "filtered level", "filtered level + season", "fitted (one step ahead)"),
+       col = c("black", "blue", "orange", "red"), lwd = 2, bty = "n")
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+plot(window(co2, start = 1990), las = 1, lwd = 2, ylab = "co2")
+lines(window(ts(filt_bsm$f, start = start(co2), frequency = 12), start = 1990), col = "red", lwd = 2)
+```
+
+Predictions for the next five years (60 months) with 95% prediction intervals from $Q_t$.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+fc_bsm <- dlmForecast(filt_bsm, nAhead = 60)
+se_fc_bsm <- sqrt(unlist(fc_bsm$Q))
+f_bsm <- ts(fc_bsm$f[, 1], start = c(1998, 1), frequency = 12)
+
+plot(window(co2, start = 1985), xlim = c(1985, 2003), ylim = c(340, 385), las = 1, ylab = "co2")
+lines(f_bsm, col = "purple", lwd = 2)
+lines(f_bsm - 1.96 * se_fc_bsm, col = "purple", lty = 2)
+lines(f_bsm + 1.96 * se_fc_bsm, col = "purple", lty = 2)
+```
+
+**Comment on the five-year forecast**
+
+### Seasonality with trigonometric terms
+
+Local linear trend plus $q$ harmonics. All trigonometric states share one variance.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+build_trig <- function(p, q) {
+  mod <- dlmModPoly() + dlmModTrig(s = 12, q = q)
+  k <- nrow(W(mod))
+  W(mod)[1, 1] <- exp(p[1])
+  W(mod)[2, 2] <- exp(p[2])
+  diag(W(mod))[3:k] <- exp(p[3])
+  V(mod) <- exp(p[4])
+  mod
+}
+```
+
+Fit $q = 1, \dots, 6$. $q = 6$ spans the same seasonal space as the 12 seasonal dummies. Log-likelihood, AIC and the RMSE of one-step-ahead prediction errors after the first two years.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+rmse_after <- function(filt, burn = 24) {
+  e <- filt$y - filt$f
+  sqrt(mean(e[-(1:burn)]^2))
+}
+
+fits_trig <- lapply(1:6, function(q) {
+  mle <- dlmMLE(co2, parm = c(0, 0, 0, 0), build = build_trig, q = q)
+  mod <- build_trig(mle$par, q)
+  list(mle = mle, mod = mod, filt = dlmFilter(co2, mod))
+})
+
+compare <- rbind(
+  t(sapply(fits_trig, function(f) c(conv = f$mle$convergence, logLik = -f$mle$value,
+                                    AIC = 2 * f$mle$value + 2 * 4, RMSE = rmse_after(f$filt)))),
+  c(mle_bsm$convergence, -mle_bsm$value, 2 * mle_bsm$value + 2 * 4, rmse_after(filt_bsm)))
+rownames(compare) <- c(paste0("trig q=", 1:6), "BSM dummies")
+compare
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+t(sapply(fits_trig, function(f) exp(f$mle$par)))
+```
+
+**Interpretation: which q is preferred, and how it compares with the dummy-variable model**
+
+Filtered seasonal component ($F$ applied to the trigonometric states) for $q = 1$, $q = 2$ and the dummy model over the last five years.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+season_trig <- function(f) {
+  m <- dropFirst(f$filt$m)
+  ts(m[, -(1:2)] %*% FF(f$mod)[-(1:2)], start = start(co2), frequency = 12)
+}
+
+plot(window(season_trig(fits_trig[[1]]), start = 1993), las = 1, lwd = 2, ylim = c(-4, 4), ylab = "seasonal effect")
+lines(window(season_trig(fits_trig[[2]]), start = 1993), col = "blue", lwd = 2)
+lines(window(ts(season_bsm, start = start(co2), frequency = 12), start = 1993), col = "orange", lwd = 2)
+legend("bottomleft", legend = c("q = 1", "q = 2", "dummies"), col = c("black", "blue", "orange"), lwd = 2, bty = "n", horiz = TRUE)
+```
+
+**Comment on the seasonal shapes**
+
+### Reflection
+
+**Reflection: what you learned, what was difficult, and how it fed into the projects**
+
+## Tutorial 4: Hidden Markov models {#sec-tut-4}
+
+**Brief statement of each question**
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+library(SimDesign)
+library(depmixS4)
+```
+
+### Question 1
+
+Simulate the state sequence from $\Gamma$, then each observation from the bivariate normal of its state. The initial state is drawn from the stationary distribution, which is uniform for this $\Gamma$.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+Gamma1 <- matrix(c(0.8, 0.1, 0.1,
+                   0.1, 0.8, 0.1,
+                   0.1, 0.1, 0.8), nrow = 3, byrow = TRUE)
+
+mu <- 10 * matrix(c(-1, 0, 1, 0, 0, 1), ncol = 2, byrow = TRUE)
+
+sf <- 10
+sigma <- array(0, dim = c(2, 2, 3))
+sigma[, , 1] <- sf * matrix(c(1, 1/2, 1/2, 1), nrow = 2)
+sigma[, , 2] <- sf * matrix(c(1, -1/2, -1/2, 1), nrow = 2)
+sigma[, , 3] <- sf * matrix(c(3, 0, 0, 1/2), nrow = 2)
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+sim_hmm_mvn <- function(n, Gamma, delta, mu, sigma) {
+  m <- nrow(Gamma)
+  z <- numeric(n)
+  z[1] <- sample(1:m, 1, prob = delta)
+  for (t in 2:n) z[t] <- sample(1:m, 1, prob = Gamma[z[t - 1], ])
+  x <- t(sapply(z, function(k) rmvnorm(1, mean = mu[k, ], sigma = sigma[, , k])))
+  list(z = z, x = x)
+}
+
+set.seed(2026)
+sim1 <- sim_hmm_mvn(n = 20, Gamma = Gamma1, delta = rep(1/3, 3), mu = mu, sigma = sigma)
+sim1$z
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+cols <- c("red", "blue", "darkgreen")
+
+plot(sim1$x, type = "n", las = 1, asp = 1, xlab = expression(x[1]), ylab = expression(x[2]))
+lines(sim1$x, col = "grey")
+points(sim1$x, pch = 19, col = cols[sim1$z])
+text(sim1$x, labels = 1:20, pos = 3, cex = 0.7)
+points(mu, pch = 4, cex = 2, lwd = 2, col = cols)
+legend("topleft", legend = paste("state", 1:3), col = cols, pch = 19, bty = "n")
+```
+
+**Comment on the simulated path**
+
+### Question 2
+
+Viterbi algorithm on the log scale. `log_emis` is a $T \times m$ matrix of $\log p_i(x_t)$, so the same function can be reused for any state-dependent distribution.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+viterbi <- function(log_init, log_Gamma, log_emis) {
+  n <- nrow(log_emis)
+  m <- ncol(log_emis)
+  xi <- matrix(NA, nrow = n, ncol = m)
+  xi[1, ] <- log_init + log_emis[1, ]
+  for (t in 2:n) {
+    for (j in 1:m) xi[t, j] <- max(xi[t - 1, ] + log_Gamma[, j]) + log_emis[t, j]
+  }
+  path <- numeric(n)
+  path[n] <- which.max(xi[n, ])
+  for (t in (n - 1):1) path[t] <- which.max(xi[t, ] + log_Gamma[, path[t + 1]])
+  list(xi = xi, path = path)
+}
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+init_prob <- c(0.4, 0.3, 0.3)
+tpm <- matrix(c(0.5, 0.3, 0.2, 0.1, 0.6, 0.3, 0.2, 0.2, 0.6), byrow = TRUE, ncol = 3)
+emmprob <- matrix(c(0.6, 0.2, 0.2, 0.1, 0.5, 0.4, 0.3, 0.3, 0.4), byrow = TRUE, ncol = 3)
+
+states <- c("A", "B", "C")
+obs <- c("x", "x", "x", "x", "x", "x", "x", "z", "z", "y")
+obs_idx <- match(obs, c("x", "y", "z"))
+true_path <- c("A", "C", "A", "A", "A", "A", "A", "B", "B", "B")
+
+vit2 <- viterbi(log(init_prob), log(tpm), log(t(emmprob[, obs_idx])))
+
+rbind(obs = obs, viterbi = states[vit2$path], true = true_path)
+```
+
+$\xi_{ti}$ on the log scale, with the decoded path circled and the true path marked with crosses.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+matplot(vit2$xi, type = "b", pch = states, col = cols, lty = 1, las = 1,
+        xlab = "t", ylab = expression(log ~ xi[ti]), xaxt = "n")
+axis(1, at = 1:10, labels = paste0(1:10, "\n", obs), padj = 0.5)
+points(1:10, vit2$xi[cbind(1:10, vit2$path)], cex = 2.5)
+points(1:10, vit2$xi[cbind(1:10, match(true_path, states))], pch = 4, cex = 2)
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+signif(exp(vit2$xi), 3)
+```
+
+**Interpretation: where the Viterbi path differs from the true path, and why**
+
+### Question 3
+
+Stationary distribution: solve $\delta(I - \Gamma + U) = \mathbf{1}$, with $U$ a matrix of ones.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+Gamma3 <- matrix(c(0.1, 0.9, 0.4, 0.6), nrow = 2, byrow = TRUE)
+lambda3 <- c(1, 3)
+x3 <- c(0, 2, 1)
+
+delta3 <- solve(t(diag(2) - Gamma3 + 1), rep(1, 2))
+delta3
+```
+
+a)  All $2^3$ state sequences, the probability of each sequence, and the probability of the observations given each sequence.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+seqs <- expand.grid(c1 = 1:2, c2 = 1:2, c3 = 1:2)
+
+p_seq <- apply(seqs, 1, function(s) delta3[s[1]] * Gamma3[s[1], s[2]] * Gamma3[s[2], s[3]])
+p_obs <- apply(seqs, 1, function(s) prod(dpois(x3, lambda3[s])))
+
+tab3 <- cbind(seqs, p_seq = p_seq, p_obs_given_seq = p_obs, joint = p_seq * p_obs)
+tab3
+sum(tab3$joint)
+```
+
+b)  Matrix formula $\delta P(0) \Gamma P(2) \Gamma P(1) \mathbf{1}'$.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+P <- function(x) diag(dpois(x, lambda3))
+
+delta3 %*% P(0) %*% Gamma3 %*% P(2) %*% Gamma3 %*% P(1) %*% rep(1, 2)
+```
+
+**Comment on the agreement between a) and b)**
+
+### Question 7
+
+$P(x) = \text{diag}(p_1(x), p_2(x))$ with $P(X_t = 1 | C_t = i) = (0.5, 1)$, so $P(0) = \text{diag}(0.5, 0)$ and $P(1) = \text{diag}(0.5, 1)$.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+Gamma7 <- matrix(c(0.5, 0.5, 0.25, 0.75), nrow = 2, byrow = TRUE)
+delta7 <- c(1, 2) / 3
+p1 <- c(0.5, 1)
+
+P_bern <- function(x, p1) diag(dbinom(x, size = 1, prob = p1))
+
+P_bern(0, p1)
+P_bern(1, p1)
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+bern_hmm_lik <- function(x, Gamma, delta, p1) {
+  v <- delta %*% P_bern(x[1], p1)
+  if (length(x) > 1) {
+    for (t in 2:length(x)) v <- v %*% Gamma %*% P_bern(x[t], p1)
+  }
+  sum(v)
+}
+
+c(L = bern_hmm_lik(c(1, 1, 1), Gamma7, delta7, p1), check = 29/48)
+```
+
+Marginal probabilities $P(X_t = 0)$ and $P(X_t = 1)$ under the stationary distribution.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+c(P0 = bern_hmm_lik(0, Gamma7, delta7, p1), P1 = bern_hmm_lik(1, Gamma7, delta7, p1))
+```
+
+**Interpretation of the marginal probabilities**
+
+### Question 8
+
+Annual counts of major earthquakes, 1900 to 2006. **Source citation for the earthquake counts**
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+eq <- data.frame(
+  year = 1900:2006,
+  quakes = c(13, 14, 8, 10, 16, 26, 32, 27, 18, 32, 36, 24, 22, 23, 22, 18, 25, 21, 21, 14, 8, 11, 14, 23, 18, 17, 19, 20, 22, 19, 13, 26, 13, 14, 22, 24, 21, 22, 26, 21, 23, 24, 27, 41, 31, 27, 35, 26, 28, 36, 39, 21, 17, 22, 17, 19, 15, 34, 10, 15, 22, 18, 15, 20, 15, 22, 19, 16, 30, 27, 29, 23, 20, 16, 21, 21, 25, 16, 18, 15, 18, 14, 10, 15, 8, 15, 6, 11, 8, 7, 18, 16, 13, 12, 13, 20, 15, 16, 12, 18, 15, 16, 13, 15, 16, 11, 11))
+
+plot(eq$year, eq$quakes, type = "b", pch = 19, cex = 0.5, las = 1, xlab = "Year", ylab = "Number of earthquakes")
+```
+
+Negative log-likelihood of a two-state Poisson HMM using the scaling algorithm from the notes. The working parameters are $\log \lambda_i$ and the logits of the off-diagonal transition probabilities, so `nlm` can search over $\mathbb{R}^4$. $\delta$ is the stationary distribution of $\Gamma$.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+pois_w2n <- function(par) {
+  lambda <- exp(par[1:2])
+  g12 <- plogis(par[3])
+  g21 <- plogis(par[4])
+  Gamma <- matrix(c(1 - g12, g12, g21, 1 - g21), nrow = 2, byrow = TRUE)
+  delta <- c(g21, g12) / (g12 + g21)
+  list(lambda = lambda, Gamma = Gamma, delta = delta)
+}
+
+pois2_nll <- function(par, x) {
+  pn <- pois_w2n(par)
+  phi <- pn$delta
+  ll <- 0
+  for (t in seq_along(x)) {
+    Px <- diag(dpois(x[t], pn$lambda))
+    v <- if (t == 1) phi %*% Px else phi %*% pn$Gamma %*% Px
+    u <- sum(v)
+    ll <- ll + log(u)
+    phi <- v / u
+  }
+  -ll
+}
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+out_eq <- nlm(pois2_nll, p = c(log(15), log(25), qlogis(0.1), qlogis(0.1)), x = eq$quakes)
+out_eq$code
+pn_eq <- pois_w2n(out_eq$estimate)
+pn_eq
+-out_eq$minimum
+```
+
+Same model with `depmixS4`. Note that `depmix` estimates the initial state probabilities freely rather than fixing them at the stationary distribution.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+set.seed(1)
+mod_eq <- depmix(quakes ~ 1, data = eq, nstates = 2, family = poisson())
+fm_eq <- fit(mod_eq)
+summary(fm_eq)
+```
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+lambda_dm <- exp(sapply(1:2, function(i) getpars(fm_eq@response[[i]][[1]])))
+ord <- order(lambda_dm)
+
+comp_eq <- rbind(own = c(pn_eq$lambda, diag(pn_eq$Gamma), -out_eq$minimum),
+                 depmix = c(lambda_dm[ord], diag(matrix(getpars(fm_eq)[3:6], 2, byrow = TRUE))[ord],
+                            as.numeric(logLik(fm_eq))))
+colnames(comp_eq) <- c("lambda1", "lambda2", "gamma11", "gamma22", "logLik")
+comp_eq
+```
+
+Most likely state sequence from the own fit (Viterbi function from Question 2) and from `depmixS4`, with states ordered by $\lambda$. The last line counts the years where the two decodings differ.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+log_emis_eq <- sapply(pn_eq$lambda, function(l) dpois(eq$quakes, l, log = TRUE))
+vit_eq <- viterbi(log(pn_eq$delta), log(pn_eq$Gamma), log_emis_eq)
+vit_dm <- rank(lambda_dm)[posterior(fm_eq, type = "viterbi")$state]
+
+plot(eq$year, eq$quakes, type = "b", pch = 19, cex = 0.5, las = 1, xlab = "Year", ylab = "Number of earthquakes")
+lines(eq$year, pn_eq$lambda[vit_eq$path], col = "red", lwd = 2, type = "s")
+lines(eq$year, sort(lambda_dm)[vit_dm], col = "blue", lwd = 2, lty = 2, type = "s")
+legend("topleft", legend = c("own fit", "depmixS4"), col = c("red", "blue"), lty = 1:2, lwd = 2, bty = "n")
+
+sum(vit_eq$path != vit_dm)
+```
+
+**Interpretation of the two-state model: the two rates, the persistence of each state, and any differences between the decodings**
+
+### Reflection
+
+**Reflection: what you learned, what was difficult, and how it fed into the projects**
+
+# Reflective commentary {#sec-reflection}
+
+**Reflective commentary of 1000 to 2000 words covering learning achievements, methodological challenges, ethical and reproducibility considerations, and future areas for development**
+
+# Journal {#sec-journal}
+
+{{< include _journal.md >}}
+
+# AI use log {#sec-ai-log}
+
+{{< include _ai-use-log.md >}}
+
+# Appendix: reproducibility {#sec-appendix}
+
+## Data access
+
+The bond yield data can be downloaded as a CSV from the [FRED series page](https://fred.stlouisfed.org/series/IRLTLT01ZAM156N) and saved as `data/IRLTLT01ZAM156N.csv` in the project folder. The tutorial datasets come from R packages (fpp2 and its dependencies, and the base datasets package) or are entered in the code. **Date the data were downloaded**
+
+## Source code
+
+The source files are in the [GitHub repository](https://github.com/alexholwills03/Time-Series-Portfolio---Alex-Holwill). Rendering `index.qmd` reproduces every table and figure.
+
+## Software
+
+```{r}
+#| label: session-info
+#| echo: true
+#| warning: false
+#| message: false
+
+# R version and package versions used to render this document
+sessionInfo()
+```
+
+## References
+
+**References in one consistent style: the FRED and OECD data, the textbooks and course notes, the R packages used (fable, forecast, rugarch, depmixS4, dlm and others), and any papers cited, such as Bai and Perron**
