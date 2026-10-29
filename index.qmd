@@ -13,7 +13,7 @@ This portfolio applies the course methods to one real-world series, the South Af
 **Overview paragraph: what the portfolio sets out to show and how the four projects build on one another**
 
 | Project | Course section | Type | Brief requirement covered |
-|:-----------------|:-----------------|:-----------------|:-----------------|
+|:---|:---|:---|:---|
 | [1. Forecast comparison](#sec-project-1) | 1 | Implementation | Model comparison, real-world data |
 | [2. Volatility of yield changes](#sec-project-2) | 1 | Implementation | Model comparison, real-world data |
 | [3. Harmonic regression](#sec-project-3) | **confirm section** | Exploration | Model comparison, real-world data |
