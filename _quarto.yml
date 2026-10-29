@@ -1,0 +1,28 @@
+project:
+  type: website
+  execute-dir: project
+  render:
+    - index.qmd
+
+website:
+  title: "Time Series Analysis Portfolio"
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: right
+    toc-depth: 3
+    toc-expand: 2
+    toc-title: "Contents"
+    number-sections: true
+    number-depth: 2
+    code-fold: true
+    code-summary: "Show code"
+    code-tools: true
+    code-overflow: wrap
+
+execute:
+  echo: true
+  warning: false
+  freeze: auto
