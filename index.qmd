@@ -1,27 +1,14 @@
 ---
 title: "Time Series Analysis Portfolio"
 subtitle: "Honours Time Series Analysis, University of Cape Town, 2026"
-author: "Alex Holwill (HLWALE001)"
+author: "Alex Holwill"
 date: last-modified
 editor: visual
 ---
 
 # Overview {#sec-overview}
 
-This portfolio applies the course methods to one real-world series, the South African 10-year government bond yield, and adds worked tutorials, a reflective commentary, a learning journal and an AI use log. Code is folded by default: click "Show code" above any chunk, or use the Code menu at the top of the page to show or hide all of it.
-
-**Overview paragraph: what the portfolio sets out to show and how the four projects build on one another**
-
-| Project | Course section | Type | Brief requirement covered |
-|:---|:---|:---|:---|
-| [1. Forecast comparison](#sec-project-1) | 1 | Implementation | Model comparison, real-world data |
-| [2. Volatility of yield changes](#sec-project-2) | 1 | Implementation | Model comparison, real-world data |
-| [3. Harmonic regression](#sec-project-3) | **confirm section** | Exploration | Model comparison, real-world data |
-| [4. Hidden Markov model](#sec-project-4) | 2 | Implementation from first principles | Computational and statistical programming, real-world data |
-
-**Check against the brief: two projects are required from each section. Projects 1 and 2 use Section 1 material (ARIMA, GARCH) and the periodogram in Project 3 is also Section 1 material, so either confirm that harmonic regression with ARMA errors is Section 2 content or add a second Section 2 project**
-
-Other components: [tutorials and section overviews](#sec-tutorials), [reflective commentary](#sec-reflection), [journal](#sec-journal), [AI use log](#sec-ai-log) and the [reproducibility appendix](#sec-appendix).
+This portfolio uses the methods covered in this course on real-world data. I have done 4 projects: project 1 looks at benchmark forecast versus ARIMA models forecast and compares them, project 2 looks at the volatility of bond yields and which GARCH specification describes it best, project 3 uses harmonic regression and project 4 use Hidden Markov Models to find regimes in yield changes and compare the regime modal forecast against a modal that assume errors are I.I.D. and normal. Porject 1,2 and 4 all look at the same data, South African 10-year government bond yields and project 3 looks at the average air temperature in Nottingham. Also, the tutorial questions that I have done have been provided below as well as an AI use log and journal. 
 
 # Data {#sec-data}
 
@@ -770,15 +757,15 @@ tibble(h = 1:24, sd = as.numeric(sigma(garch_fc))) |>
 
 **Discussion: conclusions, limitations (monthly frequency, possible breaks in volatility, a single chosen model), and how this links to the regime-switching view in [Project 4](#sec-project-4)**
 
-## Project 3: Harmonic regression with ARMA errors {#sec-project-3}
+## Project 3: Harmonic regression for a seasonal temperature series {#sec-project-3}
 
 ### Summary
 
-- Section and topic: **confirm section**, spectral analysis and harmonic (Fourier) regression with ARMA errors
-- Type: exploration on real-world data
-- Question: does the yield contain an annual cycle that harmonic terms can exploit, and does a harmonic regression with ARMA errors forecast better than a SARIMA model?
-- Data: monthly yield levels from January 1976, with the last 24 months held out
-- Methods: periodogram, harmonic regression with K = 0 to 6 Fourier pairs and ARMA errors chosen by AICc, SARIMA baseline, test-set accuracy and prediction interval coverage
+- Section and topic: Section 2, harmonic (Fourier) regression with ARMA errors, supported by the periodogram
+- Type: implementation on real-world data
+- Question: how many harmonic terms does the annual temperature cycle need, and does a harmonic regression with ARMA errors forecast as well as a SARIMA model?
+- Data: average monthly air temperature at Nottingham Castle, 1920 to 1939, in degrees Fahrenheit (R dataset `nottem`, 240 months), with the last 24 months held out
+- Methods: time and seasonal plots, periodogram, harmonic regression with K = 0 to 6 Fourier pairs and ARMA errors chosen by AICc, SARIMA baseline, test-set accuracy and prediction interval coverage
 - Key findings: **key findings**
 - What I would do differently: **what you would do differently next time**
 
@@ -795,18 +782,20 @@ tibble(h = 1:24, sd = as.numeric(sigma(garch_fc))) |>
 library(forecast)
 ```
 
+The bond yield shows virtually no seasonal component, so harmonic terms have nothing to describe there. **Evidence for this, for example the seasonal naive results in Project 1 or a periodogram of the yield changes** This project therefore uses a series with a strong, regular annual cycle: average monthly air temperature at Nottingham Castle from 1920 to 1939, supplied with R as the `nottem` dataset.
+
 ```{r}
 #| echo: true
 #| warning: false
 #| message: false
 
-# monthly ts object and a train/test split, holding out the last 24 months
+# monthly temperature series (degrees Fahrenheit) and a train/test split, holding out the last 24 months
 
-y_ts <- ts(za_tbl$yield, start = c(1976, 1), frequency = 12)
+temp_ts <- datasets::nottem
 h_test <- 24
-n_train <- length(y_ts) - h_test
-y_train <- window(y_ts, end = time(y_ts)[n_train])
-y_test <- window(y_ts, start = time(y_ts)[n_train + 1])
+n_train <- length(temp_ts) - h_test
+y_train <- window(temp_ts, end = time(temp_ts)[n_train])
+y_test <- window(temp_ts, start = time(temp_ts)[n_train + 1])
 
 tibble(set = c("train", "test"),
   n = c(length(y_train), length(y_test)),
@@ -816,6 +805,22 @@ tibble(set = c("train", "test"),
 ```
 
 The last 24 months are held out so that the harmonic regression and the SARIMA can be compared on the same out-of-sample period.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# time plot and seasonal plot of the full series
+
+autoplot(temp_ts) +
+  labs(title = "Average monthly air temperature at Nottingham Castle", x = "year", y = "degrees Fahrenheit")
+
+ggseasonplot(temp_ts) +
+  labs(title = "Seasonal plot: one line per year", x = NULL, y = "degrees Fahrenheit")
+```
+
+**Description of the series: the seasonal range, whether the shape of the annual cycle is stable from year to year, and whether there is any trend**
 
 ```{r}
 #| echo: true
@@ -836,7 +841,7 @@ ggplot(pg_tbl, aes(freq, spec)) +
   geom_line() +
   geom_vline(xintercept = 1:6, linetype = "dotted", colour = "blue") +
   scale_y_log10() +
-  labs(title = "Periodogram of the detrended yield", x = "frequency (cycles per year)", y = "spectrum (log scale)")
+  labs(title = "Periodogram of the training series", x = "frequency (cycles per year)", y = "spectrum (log scale)")
 ```
 
 ```{r}
@@ -868,7 +873,7 @@ pg_tbl |>
   kable(caption = "Periodogram ordinates at the seasonal frequencies.")
 ```
 
-The two tables show where the power sits and how much of it falls at the seasonal frequencies j/12 that the Fourier terms use. **Interpretation of the periodogram: where the power is concentrated, converted to periods in months, and whether there is a peak at 12 months. A linearly detrended series with a unit root still has most of its power at low frequencies, so consider the periodogram of the changes, a smoothed periodogram, or Fisher's test**
+The two tables show where the power sits and how much of it falls at the seasonal frequencies j/12 that the Fourier terms use. **Interpretation of the periodogram: the dominant period in months, whether the smaller peaks are harmonics of the annual cycle (2, 3, ... cycles per year) or separate cycles, and how much of the variance sits at the seasonal frequencies**
 
 ```{r}
 #| echo: true
@@ -932,7 +937,7 @@ tibble(term = names(coef(fit_hr)),
   kable(caption = paste0("Harmonic regression with ARMA errors, K = ", K_best, "."))
 ```
 
-The number of harmonics is chosen by AICc among K = 1 to 6, with K = 0 shown in the table for reference. **Interpretation of the AICc table and the coefficients. If K = 0 has the lowest AICc, the data do not support harmonic terms and the chosen K is forced rather than selected. Also justify d = 0 given the unit root evidence in the exploratory analysis**
+The number of harmonics is chosen by AICc among K = 1 to 6, with K = 0 shown in the table for reference. **Interpretation of the AICc table and the coefficients: how many harmonics the annual cycle needs, what that says about its shape (a near-sinusoidal cycle needs only one or two), and the ARMA structure left in the errors. Also justify d = 0 from the time plot (no trend) rather than assuming it**
 
 ```{r}
 #| echo: true
@@ -1000,10 +1005,10 @@ bind_rows(
 
 # point forecasts from both models against the held-out observations
 
-autoplot(window(y_ts, start = c(2015, 1))) +
+autoplot(window(temp_ts, start = c(1934, 1))) +
   autolayer(fc_hr, PI = FALSE, series = "harmonic regression") +
   autolayer(fc_sarima, PI = FALSE, series = "SARIMA") +
-  labs(title = "24-month forecasts against observed yield", x = "year", y = "per cent per annum", colour = "model")
+  labs(title = "24-month forecasts against observed temperature", x = "year", y = "degrees Fahrenheit", colour = "model")
 ```
 
 ```{r}
@@ -1032,7 +1037,7 @@ bind_rows(
 
 ### Discussion
 
-**Discussion: conclusions, limitations (a single 24-month test window, AICc not comparable across differencing orders), and extensions**
+**Discussion: conclusions, limitations (a single 24-month test window, AICc not comparable across differencing orders, a seasonal shape assumed fixed over time), when harmonic regression is preferable to SARIMA (long or non-integer seasonal periods), and why the method did not suit the bond yield**
 
 ## Project 4: Hidden Markov model for regimes in yield changes {#sec-project-4}
 
@@ -1055,6 +1060,7 @@ bind_rows(
 #| warning: false
 #| message: false
 
+y_ts <- ts(za_tbl$yield, start = c(1976, 1), frequency = 12)
 dy_ts <- diff(y_ts)
 
 plot(dy_ts, las = 1, xlab = "Year", ylab = "Change in yield (percentage points)")
