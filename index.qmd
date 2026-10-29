@@ -12,16 +12,14 @@ This portfolio uses the methods covered in this course on real-world data. I hav
 
 # Data {#sec-data}
 
-## Source and access
+I am now going to do some EDA for both datasets. Lets first look at the bond yields dataset.
 
 ```{r}
 #| echo: true
 #| warning: false
 #| message: false
 
-# load packages used throughout
-# packages needed by only one project or tutorial are loaded where first used,
-# because forecast and fpp2 mask accuracy() from fabletools, which Project 1 relies on
+# packages
 
 library(tidyverse)
 library(timetk)
@@ -54,7 +52,7 @@ tibble(n = nrow(za_raw),
 
 ```
 
-The series is the monthly long-term (10-year) government bond yield for South Africa, in per cent per annum. It is compiled by the OECD and distributed by the Federal Reserve Bank of St. Louis as FRED series [IRLTLT01ZAM156N](https://fred.stlouisfed.org/series/IRLTLT01ZAM156N) under a CC BY 4.0 licence. Download instructions are in the [appendix](#sec-appendix). The series contains no personal information, so POPIA does not apply.
+The series is the monthly long-term (10-year) government bond yield for South Africa, in per cent per annum. It is compiled by the OECD and distributed by the Federal Reserve Bank of St. Louis as FRED series [IRLTLT01ZAM156N](https://fred.stlouisfed.org/series/IRLTLT01ZAM156N).
 
 A market-determined yield was chosen over an administered policy rate because it is compatible with every method used in the projects.
 
@@ -70,10 +68,11 @@ A market-determined yield was chosen over an administered policy rate because it
 za_raw |>
   mutate(
     change = yield - lag(yield),
-    era = cut(year(date),
-              breaks = c(1956, 1975, 1985, 1994, 2000, 2008, 2020, 2027),
-              labels = c("pre-1976", "1976-85", "1986-94 sanctions era", "1995-2000 pre-targeting", "2001-08 inflation targeting", "2009-20 post-GFC", "2021-26 post-COVID"))
-              
+    # cut on dates rather than years so the first boundary can fall in March 1975
+    era = cut(date,
+              breaks = as.Date(c("1957-01-01", "1975-03-01", "1986-01-01", "1995-01-01", "2001-01-01", "2009-01-01", "2021-01-01", "2027-01-01")),
+              labels = c("pre-March 1975", "1975-85", "1986-94 sanctions era", "1995-2000 pre-targeting", "2001-08 inflation targeting", "2009-20 post-GFC", "2021-26 post-COVID"),
+              right = FALSE)
   ) |>
   filter(!is.na(change)) |>
   group_by(era) |>
@@ -87,9 +86,9 @@ za_raw |>
   kable(caption = "Months with zero change by era. A high percentage indicates an administered rate rather than a market-determined yield.")
 ```
 
-The era boundaries mark changes in South Africa's political and monetary regime: the start of market pricing of government debt, the 1985 debt standstill, the 1994 democratic transition, inflation targeting from 2000, the global financial crisis and COVID-19. They are a working choice, and other boundaries could be defended. **Sources for the era boundaries**
+The era boundaries mark changes in South Africa's political and monetary regime: the start of market pricing of government debt, the 1985 debt standstill, the 1994 democratic transition, inflation targeting from 2000, the global financial crisis and COVID-19. They are a working choice, and other boundaries could be defended. Before March 1975 the standard deviation of monthly changes is much lower than in any later era.
 
-Before 1976 the standard deviation of monthly changes is much lower than in any later era. **Interpretation of the zero-change percentages and distinct values before 1976, and the justification for starting the sample in January 1976 (administered quotation rather than market trading, the De Kock Commission context, and break tests such as Bai and Perron if used)**
+From July 1952 the Reserve Bank set a fixed pattern of rates for long-dated government stock and changed it only from time to time. This pattern was abolished from 19 February 1975, after which the Bank dealt in government stock at market-related prices (South African Reserve Bank, 1975). The earlier values are therefore administered quotes rather than market yields, so the sample starts in March 1975, the first full month of market-related pricing.
 
 ```{r}
 #| echo: true
@@ -99,7 +98,7 @@ Before 1976 the standard deviation of monthly changes is much lower than in any 
 
 # restrict to the market-determined period and build both a tibble and a tsibble
 
-start_date <- as.Date("1976-01-01")
+start_date <- as.Date("1975-03-01")
 
 za_tbl <- za_raw |>
   filter(date >= start_date)
@@ -148,7 +147,7 @@ bind_rows(
 # time plot of the yield with the era boundaries marked
 
 events <- tribble(
-  ~ date, ~ label, as.Date("1976-01-01"), "market pricing begins", as.Date("1985-09-01"), "debt standstill", as.Date("1994-04-01"), "democratic transition", as.Date("2000-02-01"), "inflation targeting", as.Date("2008-09-01"), "GFC", as.Date("2020-03-01"), "COVID")
+  ~ date, ~ label, as.Date("1975-03-01"), "market pricing begins", as.Date("1985-09-01"), "debt standstill", as.Date("1994-04-01"), "democratic transition", as.Date("2000-02-01"), "inflation targeting", as.Date("2008-09-01"), "GFC", as.Date("2020-03-01"), "COVID")
 
 za_tbl |>
   plot_time_series(date, yield, .smooth = FALSE, .interactive = FALSE, .title = "SA 10-year government bond yield", .y_lab = "per cent per annum") +
@@ -243,6 +242,113 @@ tibble(
 
 **Summary of what the exploratory analysis implies for the projects: the order of differencing, the evidence of volatility clustering, and whether seasonality is plausible**
 
+## Temperature series for Project 3 {#sec-temp-data}
+
+The series is the average monthly air temperature at Nottingham Castle from 1920 to 1939, in degrees Fahrenheit, supplied with R as the `nottem` dataset.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# monthly temperature series (degrees Fahrenheit) and a train/test split, holding out the last 24 months
+
+temp_ts <- datasets::nottem
+h_test <- 24
+n_train <- length(temp_ts) - h_test
+y_train <- window(temp_ts, end = time(temp_ts)[n_train])
+y_test <- window(temp_ts, start = time(temp_ts)[n_train + 1])
+
+tibble(set = c("train", "test"),
+  n = c(length(y_train), length(y_test)),
+  start = c(paste(start(y_train), collapse = "-"), paste(start(y_test), collapse = "-")),
+  end = c(paste(end(y_train), collapse = "-"), paste(end(y_test), collapse = "-"))
+) |> kable(caption = "Training and test sets.")
+```
+
+The last 24 months are held out so that the harmonic regression and the SARIMA in Project 3 can be compared on the same out-of-sample period. The time and seasonal plots show the full series. The numerical checks below use the training set only, so that the held-out months play no part in choosing the model.
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# time plot and seasonal plot of the full series
+# forecast is not attached until Project 3, because it masks accuracy() from fabletools, which Project 1 relies on
+
+forecast::autoplot(temp_ts) +
+  labs(title = "Average monthly air temperature at Nottingham Castle", x = "year", y = "degrees Fahrenheit")
+
+forecast::ggseasonplot(temp_ts) +
+  labs(title = "Seasonal plot: one line per year", x = NULL, y = "degrees Fahrenheit")
+```
+
+**Description of the time and seasonal plots: the size of the annual cycle, whether its shape is stable from year to year, and any unusual years**
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# monthly summary statistics on the training set
+
+tibble(month = factor(month.abb[cycle(y_train)], levels = month.abb), temp = as.numeric(y_train)) |>
+  group_by(month) |>
+  summarise(mean = mean(temp), sd = sd(temp), min = min(temp), max = max(temp)) |>
+  mutate(across(where(is.numeric), \(x) round(x, 1))) |>
+  kable(caption = "Monthly temperature summaries, training set 1920 to 1937 (degrees Fahrenheit).")
+```
+
+**Interpretation: the seasonal range from the coldest to the warmest month, and whether the spread differs between months (relevant because the harmonic regression assumes a constant error variance)**
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# annual means remove the seasonal cycle, so a trend would show up directly
+# the training set starts in January 1920 and has 18 complete years
+
+annual <- tibble(year = rep(1920:1937, each = 12), temp = as.numeric(y_train)) |>
+  group_by(year) |>
+  summarise(mean_temp = mean(temp))
+
+ggplot(annual, aes(year, mean_temp)) +
+  geom_line() +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, linetype = "dashed", colour = "blue") +
+  labs(title = "Annual mean temperature with a fitted linear trend", x = "year", y = "degrees Fahrenheit")
+
+# least squares slope; with 18 annual means the p-value is a rough guide only
+trend_fit <- lm(mean_temp ~ year, data = annual)
+
+summary(trend_fit)$coefficients["year", , drop = FALSE] |>
+  as_tibble() |>
+  rename(slope = Estimate, se = `Std. Error`, t = `t value`, p_value = `Pr(>|t|)`) |>
+  mutate(across(everything(), \(x) signif(x, 3))) |>
+  kable(caption = "Linear trend in the annual means (degrees Fahrenheit per year).")
+```
+
+**Interpretation: whether there is evidence of a trend, and whether this supports fitting the errors without differencing (d = 0)**
+
+```{r}
+#| echo: true
+#| warning: false
+#| message: false
+
+# ACF of the training series, and of the anomalies left after subtracting each calendar month's mean
+
+anom <- y_train - ave(y_train, cycle(y_train))
+
+forecast::ggAcf(y_train, lag.max = 36) +
+  labs(title = "ACF of the training series")
+
+forecast::ggAcf(anom, lag.max = 36) +
+  labs(title = "ACF of the monthly anomalies")
+```
+
+**Interpretation: the seasonal pattern in the ACF of the series, and the short-run autocorrelation left once the monthly means are removed, which the ARMA errors are meant to capture**
+
 # Projects {#sec-projects}
 
 ## Project 1: Forecast comparison for the bond yield {#sec-project-1}
@@ -252,7 +358,7 @@ tibble(
 - Section and topic: Section 1, benchmark forecasts, ARIMA models and time series cross-validation
 - Type: implementation on real-world data
 - Question: does a fitted ARIMA model forecast the yield more accurately than simple benchmarks, and at which horizons?
-- Data: monthly SA 10-year bond yield from January 1976 (see [Data](#sec-data))
+- Data: monthly SA 10-year bond yield from March 1975 (see [Data](#sec-data))
 - Methods: naive, drift and seasonal naive benchmarks, non-seasonal ARIMA, expanding-window rolling-origin evaluation at horizons of 1 to 12 months, residual diagnostics
 - Key findings: **key findings**
 - What I would do differently: **what you would do differently next time**
@@ -459,7 +565,7 @@ These prediction intervals assume a constant innovation variance, which the expl
 - Section and topic: Section 1, conditional variance models (ARCH and GARCH)
 - Type: implementation on real-world data
 - Question: is the variance of monthly yield changes time-varying, and which GARCH specification describes it best?
-- Data: monthly changes in the SA 10-year bond yield from February 1976
+- Data: monthly changes in the SA 10-year bond yield from April 1975
 - Methods: ARMA mean model chosen by information criteria, Ljung-Box and Engle LM tests for ARCH effects, GARCH(1,1) and GJR-GARCH(1,1) with normal and Student t innovations fitted jointly with the mean, robust standard errors, standardised residual diagnostics, news impact curves, volatility forecasts
 - Key findings: **key findings**
 - What I would do differently: **what you would do differently next time**
@@ -477,7 +583,7 @@ library(rugarch)
 library(FinTS)
 ```
 
-The series modelled is the monthly change in the yield, in percentage points, from 1976 onwards. **Justification for modelling changes in percentage points rather than log changes**
+The series modelled is the monthly change in the yield, in percentage points, from April 1975 onwards. **Justification for modelling changes in percentage points rather than log changes**
 
 ```{r}
 #| echo: true
@@ -765,7 +871,7 @@ tibble(h = 1:24, sd = as.numeric(sigma(garch_fc))) |>
 - Type: implementation on real-world data
 - Question: how many harmonic terms does the annual temperature cycle need, and does a harmonic regression with ARMA errors forecast as well as a SARIMA model?
 - Data: average monthly air temperature at Nottingham Castle, 1920 to 1939, in degrees Fahrenheit (R dataset `nottem`, 240 months), with the last 24 months held out
-- Methods: time and seasonal plots, periodogram, harmonic regression with K = 0 to 6 Fourier pairs and ARMA errors chosen by AICc, SARIMA baseline, test-set accuracy and prediction interval coverage
+- Methods: periodogram, harmonic regression with K = 0 to 6 Fourier pairs and ARMA errors chosen by AICc, SARIMA baseline, test-set accuracy and prediction interval coverage
 - Key findings: **key findings**
 - What I would do differently: **what you would do differently next time**
 
@@ -782,45 +888,7 @@ tibble(h = 1:24, sd = as.numeric(sigma(garch_fc))) |>
 library(forecast)
 ```
 
-The bond yield shows virtually no seasonal component, so harmonic terms have nothing to describe there. **Evidence for this, for example the seasonal naive results in Project 1 or a periodogram of the yield changes** This project therefore uses a series with a strong, regular annual cycle: average monthly air temperature at Nottingham Castle from 1920 to 1939, supplied with R as the `nottem` dataset.
-
-```{r}
-#| echo: true
-#| warning: false
-#| message: false
-
-# monthly temperature series (degrees Fahrenheit) and a train/test split, holding out the last 24 months
-
-temp_ts <- datasets::nottem
-h_test <- 24
-n_train <- length(temp_ts) - h_test
-y_train <- window(temp_ts, end = time(temp_ts)[n_train])
-y_test <- window(temp_ts, start = time(temp_ts)[n_train + 1])
-
-tibble(set = c("train", "test"),
-  n = c(length(y_train), length(y_test)),
-  start = c(paste(start(y_train), collapse = "-"), paste(start(y_test), collapse = "-")),
-  end = c(paste(end(y_train), collapse = "-"), paste(end(y_test), collapse = "-"))
-) |> kable(caption = "Training and test sets.")
-```
-
-The last 24 months are held out so that the harmonic regression and the SARIMA can be compared on the same out-of-sample period.
-
-```{r}
-#| echo: true
-#| warning: false
-#| message: false
-
-# time plot and seasonal plot of the full series
-
-autoplot(temp_ts) +
-  labs(title = "Average monthly air temperature at Nottingham Castle", x = "year", y = "degrees Fahrenheit")
-
-ggseasonplot(temp_ts) +
-  labs(title = "Seasonal plot: one line per year", x = NULL, y = "degrees Fahrenheit")
-```
-
-**Description of the series: the seasonal range, whether the shape of the annual cycle is stable from year to year, and whether there is any trend**
+The bond yield shows virtually no seasonal component, so harmonic terms have nothing to describe there. **Evidence for this, for example the seasonal naive results in Project 1 or a periodogram of the yield changes** This project therefore uses a series with a strong, regular annual cycle, the Nottingham Castle temperature series. Its training and test sets and exploratory analysis are in the [Data](#sec-temp-data) section.
 
 ```{r}
 #| echo: true
@@ -937,7 +1005,7 @@ tibble(term = names(coef(fit_hr)),
   kable(caption = paste0("Harmonic regression with ARMA errors, K = ", K_best, "."))
 ```
 
-The number of harmonics is chosen by AICc among K = 1 to 6, with K = 0 shown in the table for reference. **Interpretation of the AICc table and the coefficients: how many harmonics the annual cycle needs, what that says about its shape (a near-sinusoidal cycle needs only one or two), and the ARMA structure left in the errors. Also justify d = 0 from the time plot (no trend) rather than assuming it**
+The number of harmonics is chosen by AICc among K = 1 to 6, with K = 0 shown in the table for reference. **Interpretation of the AICc table and the coefficients: how many harmonics the annual cycle needs, what that says about its shape (a near-sinusoidal cycle needs only one or two), and the ARMA structure left in the errors. Also justify d = 0 from the trend check in the [Data](#sec-temp-data) section rather than assuming it**
 
 ```{r}
 #| echo: true
@@ -1046,7 +1114,7 @@ bind_rows(
 - Section and topic: Section 2, hidden Markov models
 - Type: implementation from first principles on real-world data
 - Question: can monthly yield changes be described by a small number of regimes with different means and volatilities, and does a regime model forecast better than an iid normal model?
-- Data: monthly changes in the yield from February 1976, with the last 24 months held out
+- Data: monthly changes in the yield from April 1975, with the last 24 months held out
 - Methods: Gaussian HMM likelihood by the scaled forward algorithm, numerical maximisation from several starting values, number of states chosen by AIC and BIC, Viterbi and forward-backward decoding, mixture forecast distributions, one-step-ahead evaluation by coverage and log score, simulated level forecasts, check against depmixS4
 - Key findings: **key findings**
 - What I would do differently: **what you would do differently next time**
@@ -1060,7 +1128,7 @@ bind_rows(
 #| warning: false
 #| message: false
 
-y_ts <- ts(za_tbl$yield, start = c(1976, 1), frequency = 12)
+y_ts <- ts(za_tbl$yield, start = c(year(start_date), month(start_date)), frequency = 12)
 dy_ts <- diff(y_ts)
 
 plot(dy_ts, las = 1, xlab = "Year", ylab = "Change in yield (percentage points)")
@@ -2526,7 +2594,7 @@ sum(vit_eq$path != vit_dm)
 
 ## Data access
 
-The bond yield data can be downloaded as a CSV from the [FRED series page](https://fred.stlouisfed.org/series/IRLTLT01ZAM156N) and saved as `data/IRLTLT01ZAM156N.csv` in the project folder. The tutorial datasets come from R packages (fpp2 and its dependencies, and the base datasets package) or are entered in the code. **Date the data were downloaded**
+The bond yield data can be downloaded as a CSV from the [FRED series page](https://fred.stlouisfed.org/series/IRLTLT01ZAM156N) and saved as `data/IRLTLT01ZAM156N.csv` in the project folder. The Project 3 temperature series (`nottem`) and the tutorial datasets come from R packages (fpp2 and its dependencies, and the base datasets package) or are entered in the code. **Date the data were downloaded**
 
 ## Source code
 
@@ -2546,4 +2614,6 @@ sessionInfo()
 
 ## References
 
-**References in one consistent style: the FRED and OECD data, the textbooks and course notes, the R packages used (fable, forecast, rugarch, depmixS4, dlm and others), and any papers cited, such as Bai and Perron**
+**References in one consistent style: the FRED and OECD data, the textbooks and course notes, the R packages used (fable, forecast, rugarch, depmixS4, dlm and others), and any papers cited**
+
+South African Reserve Bank (1975). Statement regarding the abolition of the fixed pattern of interest rates on Government securities. *Quarterly Bulletin*, March 1975, p. 23. Pretoria: South African Reserve Bank. Available at: <https://www.resbank.co.za/content/dam/sarb/publications/quarterly-bulletins/quarterly-bulletin-publications/1975/5431/03Statement-regarding-the-abolition-of-the-fixed-pattern-of-interest-rates-on-Government-securities.pdf>
