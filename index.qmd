@@ -522,7 +522,7 @@ fit_full <- za_ts |>
 tidy(fit_full) |>
   select(term, estimate, std.error, p.value) |>
   mutate(across(where(is.numeric), \(x) signif(x, 4))) |>
-  # very small p-values print as 0, so show them as < 0.001
+# very small p-values print as 0, so show them as < 0.001
   mutate(p.value = format.pval(p.value, digits = 3, eps = 0.001)) |>
   kable(caption = "Full sample ARIMA estimates.")
 ```
@@ -1133,10 +1133,10 @@ Harmonic regression is most useful when the seasonal period is long or not a who
 
 - Section and topic: Section 2, hidden Markov models
 - Type: implementation from first principles on real-world data
-- Question: can monthly yield changes be described by a small number of regimes with different means and volatilities, and does a regime model forecast better than an iid normal model?
+- Question: can monthly yield changes be described by a small number of regimes with different means and volatilities, and does a regime model forecast better than an I.I.D. normal model?
 - Data: monthly changes in the yield from April 1975, with the last 24 months held out
 - Methods: Gaussian HMM likelihood by the scaled forward algorithm, with a lower bound on the state standard deviations, numerical maximisation from several starting values, number of states chosen by AIC and BIC, Viterbi and forward-backward decoding, mixture forecast distributions, one-step-ahead evaluation by coverage and log score, simulated level forecasts, check against depmixS4
-- Key findings: BIC picks two states with almost the same mean (close to zero) but different volatility: a calm state with a standard deviation of 0.24 percentage points and a volatile state with 0.57. The calm state covers about two thirds of the time and lasts about 25 months on average, and the volatile state lasts about 12 months. The volatile state matches the mid-1980s and the late 1990s. On the 24 test months the HMM does not forecast better than the iid normal model: both cover 23 of the 24 months, but the HMM has wider intervals and a worse log score.
+- Key findings: BIC picks two states with almost the same mean (close to zero) but different volatility: a calm state with a standard deviation of 0.24 percentage points and a volatile state with 0.57. The calm state covers about two thirds of the time and lasts about 25 months on average, and the volatile state lasts about 12 months. The volatile state matches the mid-1980s and the late 1990s. On the 24 test months the HMM does not forecast better than the I.I.D. normal model: both cover 23 of the 24 months, but the HMM has wider intervals and a worse log score.
 - What I would do differently: I would add an MA(1) term within each state, since Projects 1 and 2 found autocorrelation in the changes, try the 3-state model that AIC prefers, and evaluate the forecasts over a longer test period.
 
 ### Analysis
@@ -1262,9 +1262,7 @@ fit_hmm <- function(x, m, n_starts = 20) {
       g0 <- (1 - d) / (m - 1) * matrix(1, m, m)
       diag(g0) <- d
     }
-    out <- tryCatch(nlm(hmm_nll, n2w(mu0, sigma0, g0), x = x, m = m,
-                        iterlim = 1000),
-                    error = function(e) NULL)
+    out <- tryCatch(nlm(hmm_nll, n2w(mu0, sigma0, g0), x = x, m = m, iterlim = 1000), error = function(e) NULL)
     if (!is.null(out) && (is.null(best) || out$minimum < best$minimum)) {
       best <- out
     }
@@ -1374,7 +1372,7 @@ log_fb <- function(x, fit) {
     la[t, ] <- lscale + log(phi)
   }
 
-  # beta_T = 1, stored as phi = 1/m with log scale log(m)
+# beta_T = 1, stored as phi = 1/m with log scale log(m)
   phi <- rep(1 / m, m)
   lscale <- log(m)
   for (t in (n - 1):1) {
@@ -1438,7 +1436,7 @@ The h-step forecast distribution is a normal mixture with weights $\phi_T \Gamma
 
 filter_probs <- function(x, fit) {
   la <- log_fb(x, fit)$la
-  # subtract each row's maximum before exponentiating
+# subtract each row's maximum before exponentiating
   f <- exp(la - apply(la, 1, max))
   f / rowSums(f)
 }
@@ -1513,7 +1511,7 @@ rbind(hmm = one_step_eval(hmm_fit, filt_all),
   kable(caption = "One-step-ahead evaluation on the test months: coverage of the 95% interval, mean interval width and mean log score.")
 ```
 
-Both models cover 23 of the 24 test months (95.8%), so they do equally well on coverage. The HMM intervals are wider on average (1.59 against 1.49 percentage points) and its log score is worse (-0.538 against -0.386), so on these test months the HMM forecasts worse than the iid normal model. A likely reason is that volatility in the test period (about 0.33 since 2022, from the EDA) sits between the two states. When the filter puts the model in the calm state (standard deviation 0.24), the larger changes, such as the rise of about 0.8 in early 2026, get a very low predicted probability, and this pulls the log score down. With only 24 test months this is weak evidence either way, but it does not support the idea that the regime model forecasts better.
+Both models cover 23 of the 24 test months (95.8%), so they do equally well on coverage. The HMM intervals are wider on average (1.59 against 1.49 percentage points) and its log score is worse (-0.538 against -0.386), so on these test months the HMM forecasts worse than the I.I.D. normal model. A likely reason is that volatility in the test period (about 0.33 since 2022, from the EDA) sits between the two states. When the filter puts the model in the calm state (standard deviation 0.24), the larger changes, such as the rise of about 0.8 in early 2026, get a very low predicted probability, and this pulls the log score down. With only 24 test months this is weak evidence either way, but it does not support the idea that the regime model forecasts better.
 
 #### Yield level forecasts by simulation
 
@@ -1568,7 +1566,7 @@ legend("topleft", legend = c(paste0(m_hat, "-state HMM (median, 95%)"), "1-state
        col = c("red", "steelblue"), lty = c(1, 3), bty = "n")
 ```
 
-The HMM median forecast stays flat at about 11.7%, because both states have a mean change close to zero. The 95% band widens over time, from about 1.5 percentage points wide at one month to about 7 percentage points (about 8.4% to 15.5%) at 24 months. It is almost the same as the band from the iid normal model, because over two years the HMM moves towards its long-run mix of states, whose overall standard deviation (about 0.38) is the same as that of the iid model. The actual yield fell from about 11.7% to about 8.3% by early 2026, which is near the lower edge of both bands. Neither model expected a fall this big, but both treat it as possible.
+The HMM median forecast stays flat at about 11.7%, because both states have a mean change close to zero. The 95% band widens over time, from about 1.5 percentage points wide at one month to about 7 percentage points (about 8.4% to 15.5%) at 24 months. It is almost the same as the band from the I.I.D. normal model, because over two years the HMM moves towards its long-run mix of states, whose overall standard deviation (about 0.38) is the same as that of the I.I.D. model. The actual yield fell from about 11.7% to about 8.3% by early 2026, which is near the lower edge of both bands. Neither model expected a fall this big, but both treat it as possible.
 
 #### Check against depmixS4
 
@@ -1596,7 +1594,7 @@ The two fits agree very closely. The state means, standard deviations and transi
 
 ### Discussion
 
-Monthly yield changes are well described by two regimes with the same average change but different volatility: a calm regime that the yield is in about two thirds of the time and a volatile regime with more than twice the standard deviation. The regimes are persistent, lasting about 25 and 12 months on average, and the volatile regime matches the mid-1980s and late 1990s. However, the HMM did not forecast better than a simple iid normal model on the 24 test months.
+Monthly yield changes are well described by two regimes with the same average change but different volatility: a calm regime that the yield is in about two thirds of the time and a volatile regime with more than twice the standard deviation. The regimes are persistent, lasting about 25 and 12 months on average, and the volatile regime matches the mid-1980s and late 1990s. However, the HMM did not forecast better than a simple I.I.D. normal model on the 24 test months.
 
 There are some limitations. Each state assumes normal changes with no autocorrelation, but Projects 1 and 2 found an MA(1) in the changes, so the model leaves this out. The parameters were held at their training values over the test period, and 24 test months are too few to compare the forecasts with much confidence. AIC and BIC disagree on the number of states, so the choice of 2 is not clear-cut. Finally, the standard deviation floor was needed to stop the 3-state fit from collapsing onto the months with no change.
 
@@ -1606,7 +1604,7 @@ The HMM and the GARCH model in [Project 2](#sec-project-2) give two different vi
 
 The four projects fit together as follows. Project 1 shows that the yield behaves almost like a random walk. A small MA(1) effect helps one month ahead, but after that the naive forecast is as good as anything else. Its prediction intervals assume a constant variance, and the residuals show that this is not true, because big changes cluster together in certain periods. This is what Project 2 picks up. The same MA(1) appears in its mean model (0.31, against 0.34 in Project 1), and a GARCH(1,1) with Student t errors removes the ARCH effects and shows volatility jumping after big shocks and then fading, with a half-life of about 7.5 months.
 
-Project 4 looks at the same changing volatility in a different way. Instead of volatility that moves smoothly from month to month, the HMM switches between a calm and a volatile regime that each last a year or more. The two models agree on when the yield was volatile: the mid-1980s, the late 1990s and short spells such as 2020. This suggests these periods come from the data rather than from the assumptions of one model. Where they differ is in how volatility changes. GARCH allows any level in between, while the 2-state HMM only has two levels. In the test period this mattered, because volatility since 2022 has been moderate and the HMM did not forecast better than an iid normal model.
+Project 4 looks at the same changing volatility in a different way. Instead of volatility that moves smoothly from month to month, the HMM switches between a calm and a volatile regime that each last a year or more. The two models agree on when the yield was volatile: the mid-1980s, the late 1990s and short spells such as 2020. This suggests these periods come from the data rather than from the assumptions of one model. Where they differ is in how volatility changes. GARCH allows any level in between, while the 2-state HMM only has two levels. In the test period this mattered, because volatility since 2022 has been moderate and the HMM did not forecast better than an I.I.D. normal model.
 
 Project 3 uses a different series. On the Nottingham temperatures, which have a strong yearly cycle, harmonic regression forecasts as well as a SARIMA model while being simpler to interpret.
 
@@ -2583,7 +2581,41 @@ The two-state model has a low-rate state with about 15.5 earthquakes a year and 
 
 # Reflective commentary {#sec-reflection}
 
-**Reflective commentary of 1000 to 2000 words covering learning achievements, methodological challenges, ethical and reproducibility considerations, and future areas for development**
+### Learning achievements
+
+The most useful thing I learned in this portfolio is that a result that does not work is still a result. Going in, I expected the more advanced models to beat the simple ones. Most of the time they did not, and working out why taught me more than a clean win would have.
+
+Project 1 was the first time this happened. I expected ARIMA(0,1,1) to clearly beat the benchmarks, but it only beat the naive forecast one month ahead, with an RMSE about 2.7% lower (0.372 against 0.382 percentage points). From three months ahead the naive forecast was as good or slightly better. At first this felt like the project had failed, but it is actually what the theory says should happen. The MA(1) model only adds a fraction of the last forecast error to the naive forecast, so its advantage can only show up in the first month. Once I understood that, the result stopped looking like a failure and started looking like evidence that the yield behaves almost like a random walk at a monthly level. The seasonal naive method gave the same kind of lesson in a smaller way. Its RMSE at twelve months was exactly equal to the naive RMSE, which looked like a bug until I realised that twelve months ahead both methods forecast the last observation.
+
+Project 4 gave a similar result. The two-state HMM found two clear regimes in the yield changes, a calm one with a standard deviation of 0.24 percentage points and a volatile one with 0.57, and these lined up well with periods I could explain. But on the 24 test months it did not forecast better than a simple I.I.D. normal model. Both covered 23 of the 24 months, but the HMM had wider intervals and a worse log score (-0.538 against -0.386). It would have been easy to leave the forecast comparison out and only show the nice regime plots. I think including it makes the project more useful, because it shows that a model can describe the past well and still not forecast better, and it led me to a likely reason: the volatility since 2022 sits between the two states, which a two-state model cannot represent.
+
+The second thing I learned was how to think about volatility. Before this course I mostly thought of a time series model as a model for the mean. Projects 2 and 4 changed that. The GARCH(1,1) model with Student t errors showed volatility jumping after big shocks and fading with a half-life of about 7.5 months, while the HMM showed volatility switching between two levels and staying there for a year or more. These are two quite different stories about the same data, but they agreed on when the yield was volatile: the mid-1980s around the debt standstill, the late 1990s, and short spells such as 2020. Seeing two models with different assumptions point to the same periods made me much more confident that those periods are real features of the data and not something one model invented. It also changed how I see the Project 1 result. If the level of the yield is close to unpredictable, then most of what can usefully be modelled is how uncertain the next month is, not which direction it will go.
+
+The third thing was data quality judgement. In the first week I noticed that before the mid-1970s the yield barely moved: 86.6% of months showed no change at all, and the series took only 20 different values in 217 months. At that point I cut the sample at January 1976 based on what the data looked like, but I did not have a reason I could defend. It took until the last week to find one. A 1975 statement in the Reserve Bank's Quarterly Bulletin explains that from July 1952 the Bank set a fixed pattern of rates for government stock and only changed it from time to time, and that this was abolished on 19 February 1975. This meant the earlier values were administered quotes rather than market yields, and it let me move the start of the sample to March 1975 with an actual reason behind it. I learned that a statistical pattern can tell you something is wrong with the data, but it usually takes knowledge of where the data came from to explain what is wrong and what to do about it.
+
+### Methodological challenges
+
+The biggest methodological problem came up in Project 4, and it was connected to the data quality issue above. My first three-state HMM had a state with a mean of 0 and a standard deviation of nearly 0 as well, and its log-likelihood (-70.8) was much higher than the depmixS4 fit of the same model (-197.2). At first a higher likelihood looked like a better fit. It was actually a sign that something was wrong. The normal likelihood has no upper limit when one state sits exactly on repeated values with a standard deviation shrinking to zero, and the early part of my sample still had months with no change at all. The optimiser had found this degenerate solution and stopped without converging. I fixed it by putting a floor of 0.05 percentage points on the state standard deviations, which is far below the spread of a calm month, so it only rules out the degenerate fit. After that all the fits converged, BIC chose two states, and my own fit matched depmixS4 almost exactly, with Viterbi paths that agreed in every month. The lesson for me is that checking my own implementation against a package was not just a formality. It was the step that showed the problem existed.
+
+A second challenge was choosing the right data for the method. I planned to do harmonic regression on the bond yield, but the periodogram and the ACF showed no yearly cycle at all, so the Fourier terms had nothing to describe. I lost a few days trying to make it work before accepting that the method did not suit this series. Switching to the Nottingham temperature data was the right decision, since the yearly cycle there holds about 84% of the periodogram power. I still think the failed attempt was worth reporting briefly, because it explains why one of the four projects uses a different series.
+
+Several smaller problems came up in model selection and evaluation. Information criteria did not always agree. In Project 4, BIC preferred two states and AIC preferred three, and in Project 3, AICc picked four harmonics but two and three were almost tied. I had to accept that in these cases the data do not clearly choose one model, and say so rather than present the selected model as clearly best. AICc also could not be used to compare the harmonic regression with the SARIMA in Project 3, because the SARIMA uses a seasonal difference, so that comparison had to rest on the test set instead. The evaluations themselves had limits too. In Project 1, forecasts from neighbouring origins overlap, so the 365 origins carry less information than the number suggests, and I did not test whether the accuracy differences were significant. In Projects 3 and 4 the test sets were only 24 months long, which meant that a single month changed the coverage by about 4 percentage points. These limits do not make the results wrong, but they do mean the differences between models should be read as weak evidence.
+
+There were practical challenges as well. The forecast and fabletools packages both have an accuracy() function and kept masking each other, which gave confusing errors until I loaded forecast later and called it explicitly. The rolling-origin cross-validation in Project 1 was slow to render, and setting up the GitHub Pages site with Quarto took much longer than I expected. Moving the sample start to March 1975 near the end also meant rechecking every result that depended on it, which was tedious but showed me why it helps to write the start date once in the code and have everything else read from it.
+
+### Ethical and reproducibility considerations
+
+The main ethical issue in this portfolio is reporting results honestly, including the ones that did not work. There were several points where a less complete write-up would have looked better. I could have reported only the one-month ARIMA result, shown only the regime plots for the HMM without the forecast comparison, or left out the bond yield attempt in Project 3. I could also have kept the first three-state HMM, since its likelihood was higher. Each of these would have made a model look better than it is. Forecasts and risk measures based on bond yields are used for real decisions, and someone relying on an overstated result could take on more risk than they think. So I have tried to report every comparison I ran, give the size of each difference and not just its direction, and say clearly when a difference is small or the test set too short to be sure.
+
+The same principle applies to the decisions I made along the way. The choice of sample start, the standard deviation floor, the number of states and the number of harmonics all affect the results. I have tried to state each one, explain why I made it, and where possible show what happens without it, so that a reader can judge the decision for themselves. Reproducibility supports this. The whole portfolio renders from one Quarto file, the data source and download date are documented, seeds are set wherever results depend on simulation or random starting values, and the package versions are listed. This means someone else can rerun the analysis and check that my results are what I say they are.
+
+I also used AI assistance, which is declared in the AI use log. I treated its suggestions as something to check rather than something to accept, for example by reading the Reserve Bank statement myself before using it and by confirming the HMM fix against depmixS4.
+
+### Future areas for development
+
+The most natural next step is to combine the ARIMA mean model from Project 1 with the GARCH variance model from Project 2. The point forecast of the yield would stay close to a random walk, but the prediction intervals would widen after big shocks and narrow in calm periods, which fixes the main weakness of the constant-variance intervals in Project 1. I would also add a Diebold-Mariano test to check whether the accuracy differences in Project 1 are significant, and choose the ARIMA order again at each forecast origin so the comparison reflects uncertainty in model selection.
+
+For the volatility models, I would refit the GARCH model on parts of the sample, such as before and after inflation targeting, to check whether the persistence of 0.91 is partly caused by shifts in the overall level of volatility between eras. I would also compare GARCH and the HMM on out-of-sample volatility forecasts rather than in-sample fit alone.
 
 # Journal {#sec-journal}
 
