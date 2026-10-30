@@ -2633,7 +2633,7 @@ The bond yield data can be downloaded as a CSV from the [FRED series page](https
 
 ## Source code
 
-The source files are in the [GitHub repository](https://github.com/alexholwills03/Time-Series-Portfolio---Alex-Holwill). Rendering `index.qmd` reproduces every table and figure.
+The source files are in the [GitHub repository](https://github.com/alexholwill03/Time-Series-Portfolio---Alex-Holwill). Rendering `index.qmd` reproduces every table and figure.
 
 ## Software
 
