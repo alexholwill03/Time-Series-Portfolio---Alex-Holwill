@@ -1,4 +1,4 @@
-## Date: Week of 4 September
+## Date: Week of 6 September
 
 ### Topic: Finding data & EDA on the bond yields
 
@@ -19,7 +19,7 @@
 - Do tut 1
 - Keep looking into the pre-1976 data
 
-## Date: Week of 11 September
+## Date: Week of 13 September
 
 ### Topic: Tutorial 1
 
@@ -36,7 +36,7 @@
 
 - Start projects 1 and 2 on the bond yield
 
-## Date: Week of 18 September
+## Date: Week of 20 September
 
 ### Topic: Projects 1 and 2
 
@@ -57,7 +57,7 @@
 
 - Do tut 2 on exponential smoothing
 
-## Date: Week of 25 September
+## Date: Week of 27 September
 
 ### Topic: Tutorial 2
 
@@ -76,7 +76,7 @@
 
 - Do tut 3 on dynamic linear models
 
-## Date: Week of 2 October
+## Date: Week of 4 October
 
 ### Topic: Tutorial 3
 
@@ -95,7 +95,7 @@
 
 - Start project 3: harmonic regression on the bond yield
 
-## Date: Week of 9 October
+## Date: Week of 11 October
 
 ### Topic: Project 3 (and switching datasets)
 
@@ -115,7 +115,7 @@
 
 - Do the HMM tut and project 4
 
-## Date: Week of 16 October
+## Date: Week of 18 October
 
 ### Topic: HMM tutorial and Project 4
 
@@ -134,7 +134,7 @@
 
 - Go back through all the projects and tuts and check everything
 
-## Date: Week of 23 October
+## Date: Week of 25 October
 
 ### Topic: Checking my work
 

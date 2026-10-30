@@ -2629,7 +2629,7 @@ Hyndman, R. J. and Khandakar, Y. (2008). Automatic time series forecasting: the 
 
 OECD (n.d.). Long-term interest rates (indicator). Paris: OECD. Available at: <https://www.oecd-ilibrary.org/en/data/indicators/long-term-interest-rates.html> (accessed 29 October 2026).
 
-OECD (2026). Interest Rates: Long-Term Government Bond Yields: 10-Year: Main (Including Benchmark) for South Africa [IRLTLT01ZAM156N]. Retrieved from FRED, Federal Reserve Bank of St. Louis. Available at: <https://fred.stlouisfed.org/series/IRLTLT01ZAM156N> (accessed 4 September 2026).
+OECD (2026). Interest Rates: Long-Term Government Bond Yields: 10-Year: Main (Including Benchmark) for South Africa \[IRLTLT01ZAM156N\]. Retrieved from FRED, Federal Reserve Bank of St. Louis. Available at: <https://fred.stlouisfed.org/series/IRLTLT01ZAM156N> (accessed 4 September 2026).
 
 O'Hara-Wild, M., Hyndman, R. and Wang, E. (2026). fable: Forecasting models for tidy time series. R package version 0.5.0. doi:10.32614/CRAN.package.fable. Available at: <https://CRAN.R-project.org/package=fable>
 
