@@ -8,7 +8,7 @@ editor: visual
 
 # Overview {#sec-overview}
 
-This portfolio uses the methods covered in this course on real-world data. I have done 4 projects: project 1 looks at benchmark forecast versus ARIMA models forecast and compares them, project 2 looks at the volatility of bond yields and which GARCH specification describes it best, project 3 uses harmonic regression and project 4 use Hidden Markov Models to find regimes in yield changes and compare the regime modal forecast against a modal that assume errors are I.I.D. and normal. Project 1,2 and 4 all look at the same data, South African 10-year government bond yields and project 3 looks at the average air temperature in Nottingham. Also, the tutorial questions that I have done have been provided below as well as an AI use log and journal.
+This portfolio uses the methods covered in this course on real-world data. I have done 4 projects: project 1 looks at benchmark forecasts versus ARIMA model forecasts and compares them, project 2 looks at the volatility of bond yields and which GARCH specification describes it best, project 3 uses harmonic regression, and project 4 uses Hidden Markov Models to find regimes in yield changes and compares the regime model forecast against a model that assumes the errors are I.I.D. and normal. Projects 1, 2 and 4 all look at the same data, South African 10-year government bond yields, and project 3 looks at the average air temperature in Nottingham. Also, the tutorial questions that I have done have been provided below, as well as an AI use log and journal.
 
 # Data {#sec-data}
 
@@ -113,6 +113,8 @@ za_tt <- za_tbl |>
 
 has_gaps(za_ts) |> as_tibble() |> kable(caption = "Implicit gaps in the monthly index.")
 # no gaps, if there are gaps the lag() and difference() functions would skip a missing month, this confirms no missing months.
+
+saveRDS(za_tbl, "data/za_yield_clean.rds")
 ```
 
 ## Summary statistics
@@ -1606,7 +1608,7 @@ The four projects fit together as follows. Project 1 shows that the yield behave
 
 Project 4 looks at the same changing volatility in a different way. Instead of volatility that moves smoothly from month to month, the HMM switches between a calm and a volatile regime that each last a year or more. The two models agree on when the yield was volatile: the mid-1980s, the late 1990s and short spells such as 2020. This suggests these periods come from the data rather than from the assumptions of one model. Where they differ is in how volatility changes. GARCH allows any level in between, while the 2-state HMM only has two levels. In the test period this mattered, because volatility since 2022 has been moderate and the HMM did not forecast better than an iid normal model.
 
-Project 3 uses a different series. On the Nottingham temperatures, which have a strong yearly cycle, it forecasts as well as a SARIMA model while being simpler to interpret.
+Project 3 uses a different series. On the Nottingham temperatures, which have a strong yearly cycle, harmonic regression forecasts as well as a SARIMA model while being simpler to interpret.
 
 Taken together, the projects say that the level of the yield is hard to forecast beyond one month, and that most of what can be modelled is in its volatility rather than its direction. The regime model does not improve the forecast capacity. The most useful next step would be to combine the ARIMA mean from Project 1 with the GARCH variance from Project 2. The forecast of the level would then stay close to a random walk, but the prediction intervals would widen and narrow with volatility.
 
@@ -2595,7 +2597,7 @@ The two-state model has a low-rate state with about 15.5 earthquakes a year and 
 
 ## Data access
 
-The bond yield data can be downloaded as a CSV from the [FRED series page](https://fred.stlouisfed.org/series/IRLTLT01ZAM156N) and saved as `data/IRLTLT01ZAM156N.csv` in the project folder. The file used here was downloaded on 4 September 2026 and covers January 1957 to June 2026 (834 monthly observations). FRED can revise or extend the series, so a later download may give slightly different results. The Project 3 temperature series (`nottem`), the Nile and co2 series in Tutorial 3, and the Tutorial 2 datasets come from R packages (the base datasets package, and fpp2 and its dependencies). The earthquake counts in Tutorial 4 and the small examples in the other tutorials are entered in the code. Random seeds are set in the code wherever results depend on simulation or random starting values, so rendering `index.qmd` gives the same results each time.
+The bond yield data can be downloaded as a CSV from the [FRED series page](https://fred.stlouisfed.org/series/IRLTLT01ZAM156N) and saved as `data/IRLTLT01ZAM156N.csv` in the project folder. The cleaned series (March 1975 onwards) is saved as data/za_yield_clean.rds. The file used here was downloaded on 4 September 2026 and covers January 1957 to June 2026 (834 monthly observations). FRED can revise or extend the series, so a later download may give slightly different results. The Project 3 temperature series (`nottem`), the Nile and co2 series in Tutorial 3, and the Tutorial 2 datasets come from R packages (the base datasets package, and fpp2 and its dependencies). The earthquake counts in Tutorial 4 and the small examples in the other tutorials are entered in the code. Random seeds are set in the code wherever results depend on simulation or random starting values, so rendering `index.qmd` gives the same results each time.
 
 ## Source code
 
